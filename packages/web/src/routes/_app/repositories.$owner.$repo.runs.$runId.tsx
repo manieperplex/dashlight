@@ -155,8 +155,8 @@ function RunDetail() {
       <RunSummaryBar run={run} owner={owner} repo={repo} artifacts={artifacts} />
 
       <div className="stack" style={{ marginTop: "1.25rem" }}>
-        {/* ── Recent runs on same branch ── */}
-        <BranchHistoryCard owner={owner} repo={repo} currentRunId={run.id} branch={run.headBranch} event={run.event} />
+        {/* ── Jobs ── */}
+        <JobsCard jobs={jobs} owner={owner} repo={repo} runCompleted={run.status === "completed"} />
 
         {/* ── Job DAG ── */}
         {jobs && jobs.length > 0 && (
@@ -168,8 +168,8 @@ function RunDetail() {
           </Card>
         )}
 
-        {/* ── Jobs ── */}
-        <JobsCard jobs={jobs} owner={owner} repo={repo} runCompleted={run.status === "completed"} />
+        {/* ── Recent runs on same branch ── */}
+        <BranchHistoryCard owner={owner} repo={repo} currentRunId={run.id} branch={run.headBranch} event={run.event} />
       </div>
     </div>
   )
