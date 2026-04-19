@@ -1,6 +1,6 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
 # Context: repo root (set in docker-compose.yml)
-FROM node:24-alpine AS builder
+FROM node:25-alpine AS builder
 
 # Docker Desktop's build network has no IPv6 routing; force Node.js to prefer
 # IPv4 so corepack/pnpm can reach registry.npmjs.org without timing out.
