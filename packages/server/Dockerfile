@@ -1,6 +1,6 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
 # Context: repo root (set in docker-compose.yml)
-FROM node:24-alpine AS builder
+FROM node:25-alpine AS builder
 
 # Docker Desktop's build network has no IPv6 routing; force Node.js to prefer
 # IPv4 so corepack/pnpm can reach registry.npmjs.org without timing out.
@@ -25,7 +25,7 @@ RUN pnpm --filter @dashlight/server build
 RUN pnpm deploy --filter @dashlight/server --prod /standalone
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM node:24.3.0-alpine3.22 AS runner
+FROM node:25.9.0-alpine3.22 AS runner
 
 # Upgrade OS packages to patch any CVEs present in the pinned base image,
 # then install only what the healthcheck needs.
