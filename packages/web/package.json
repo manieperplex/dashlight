@@ -19,7 +19,7 @@
     "@tanstack/react-query-persist-client": "^5.99.0",
     "@tanstack/react-router": "^1.168.22",
     "@xyflow/react": "^12.10.2",
-    "@dagrejs/dagre": "^1.1.4",
+    "@dagrejs/dagre": "^3.0.0",
     "idb-keyval": "^6.2.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
