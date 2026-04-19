@@ -3,8 +3,6 @@ name: Release
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
   workflow_dispatch:
 
 # Never cancel a release mid-flight; queue instead.
