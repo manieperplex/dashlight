@@ -1,0 +1,18 @@
+node_modules
+packages/server/node_modules
+packages/web/node_modules
+packages/server/dist
+packages/web/dist
+packages/server/coverage
+packages/web/coverage
+**/*.test.ts
+**/*.test.tsx
+**/*.test.mjs
+.git
+.env*
+
+# Dev tooling — not needed in build context
+scripts/
+.github/
+.husky/
+vitest.config.ts

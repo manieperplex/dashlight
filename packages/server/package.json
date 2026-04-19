@@ -1,0 +1,35 @@
+{
+  "name": "@dashlight/server",
+  "version": "1.0.0-rc.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "node --env-file=../../.env --import tsx/esm --watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.14",
+    "hono": "^4.12.14",
+    "jose": "^6.2.2",
+    "js-yaml": "^4.1.1",
+    "lru-cache": "^11.3.5",
+    "undici": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "catalog:",
+    "eslint": "catalog:",
+    "tsx": "^4.21.0",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vitest": "catalog:"
+  }
+}

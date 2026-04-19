@@ -1,0 +1,36 @@
+{
+  "version": "0.2",
+  "words": [
+    "PKCE",
+    "undici",
+    "hono",
+    "lrucache",
+    "noreply",
+    "recharts",
+    "tanstack",
+    "vite",
+    "vitejs",
+    "vitest",
+    "jsdom",
+    "pnpm",
+    "addgroup",
+    "adduser",
+    "dashlight",
+    "npmjs",
+    "autoselection",
+    "buildx",
+    "Epperlein",
+    "HSTS",
+    "nosniff",
+    "geolocation",
+    "organisation",
+    "organisations",
+    "authorised",
+    "myorg"
+  ],
+  "ignorePaths": [
+    "node_modules",
+    "dist",
+    "pnpm-lock.yaml"
+  ]
+}

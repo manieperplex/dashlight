@@ -1,0 +1,112 @@
+version: 2
+
+updates:
+  # ── GitHub Actions ──────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # ── Docker images (server) ──────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/packages/server"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  # ── Docker images (web) ─────────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/packages/web"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  # ── Root workspace + catalog ────────────────────────────────────────────────
+  # Catalog entries in pnpm-workspace.yaml are updated via this entry.
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "root"
+    groups:
+      catalog-typescript:
+        patterns:
+          - "typescript"
+      catalog-eslint:
+        patterns:
+          - "eslint"
+          - "typescript-eslint"
+      catalog-testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+
+  # ── packages/server ─────────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/packages/server"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "server"
+    groups:
+      types:
+        patterns:
+          - "@types/*"
+
+  # ── packages/web ────────────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/packages/web"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "web"
+    groups:
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+        exclude-patterns:
+          - "@tanstack/router-vite-plugin"
+      vite-build:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "@tanstack/router-vite-plugin"
+      testing:
+        patterns:
+          - "jsdom"
+          - "@testing-library/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      types:
+        patterns:
+          - "@types/*"
+        exclude-patterns:
+          - "@types/react"
+          - "@types/react-dom"

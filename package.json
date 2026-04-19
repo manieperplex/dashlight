@@ -1,0 +1,32 @@
+{
+  "name": "dashlight",
+  "version": "1.0.0-rc.1",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r --parallel test",
+    "test:web": "pnpm --filter @dashlight/web test",
+    "test:server": "pnpm --filter @dashlight/server test",
+    "test:coverage": "pnpm -r --parallel test:coverage",
+    "test:coverage:web": "pnpm --filter @dashlight/web test:coverage",
+    "test:coverage:server": "pnpm --filter @dashlight/server test:coverage",
+    "clean": "pnpm -r clean",
+    "test:scripts": "vitest run"
+  },
+  "lint-staged": {
+    "packages/server/src/**/*.ts": "pnpm --filter @dashlight/server exec eslint --fix",
+    "packages/web/src/**/*.{ts,tsx}": "pnpm --filter @dashlight/web exec eslint --fix"
+  },
+  "devDependencies": {
+    "conventional-changelog-conventionalcommits": "^9.3.1",
+    "conventional-recommended-bump": "^11.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
