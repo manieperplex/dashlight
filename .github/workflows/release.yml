@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+# Never cancel a release mid-flight; queue instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  # ── 1. Compute the next version ─────────────────────────────────────────────
+  #
+  # Two guards prevent double-releasing:
+  #   a) Commit-message guard: the release workflow pushes a bump commit
+  #      ("chore: release vX.Y.Z") back to main, which re-triggers this
+  #      workflow. The message check exits early without touching the tag.
+  #   b) Tag-existence guard: secondary safety net in case the commit message
+  #      ever differs (e.g. manual push).
+  version:
+    name: Compute version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      next_version: ${{ steps.compute.outputs.version }}
+      tag: ${{ steps.compute.outputs.tag }}
+      skip: ${{ steps.compute.outputs.skip }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          fetch-depth: 0  # full history required by conventional-recommended-bump
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320  # v4.4.0
+        with:
+          version: 10
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compute next version
+        id: compute
+        run: |
+          # Guard (a): skip the bump commit pushed by this workflow itself.
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          if [[ "$COMMIT_MSG" == "chore: release v"* ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! VERSION=$(node scripts/compute-next-version.mjs) || [[ -z "$VERSION" ]]; then
+            echo "::error::compute-next-version.mjs failed or returned empty output"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}"         >> "$GITHUB_OUTPUT"
+
+          # Guard (b): skip if the tag already exists.
+          if git tag --list "${TAG}" | grep -q "${TAG}"; then
+            echo "skip=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── 2. Bump versions, update changelog, tag, GitHub Release ─────────────────
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.skip == 'false'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320  # v4.4.0
+        with:
+          version: 10
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bump versions in package.json files
+        run: node scripts/bump-versions.mjs ${{ needs.version.outputs.next_version }}
+
+      - name: Update CHANGELOG.md
+        # -p conventionalcommits  use the conventionalcommits preset
+        # -i / -s                 update CHANGELOG.md in place
+        # (no -r flag)            prepend only the latest release section
+        run: pnpm dlx conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s
+
+      - name: Commit, tag, and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json packages/server/package.json packages/web/package.json CHANGELOG.md
+          git commit -m "chore: release ${{ needs.version.outputs.tag }}"
+          # Annotated tags (-a) are required for --follow-tags to include the tag
+          # in the same push as the bump commit.
+          git tag -a ${{ needs.version.outputs.tag }} -m "Release ${{ needs.version.outputs.tag }}"
+          # --follow-tags pushes the commit and the tag in a single round-trip.
+          git push origin HEAD:main --follow-tags
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          # Grab everything between the first and second "## [" headings.
+          BODY=$(awk '/^## \[/{i++} i==1{print} i==2{exit}' CHANGELOG.md)
+          {
+            echo "body<<RELEASE_EOF"
+            echo "$BODY"
+            echo "RELEASE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: ${{ needs.version.outputs.tag }}
+          body: ${{ steps.notes.outputs.body }}
+

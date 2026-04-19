@@ -1,0 +1,58 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
+    # Not exposed publicly — nginx is the only ingress point.
+    # Uncomment the line below to expose the server port for local debugging:
+    # ports:
+    #   - "8080:8080"
+    environment:
+      PORT: 8080
+      NODE_ENV: production
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET}
+      # Must match the public URL users reach the app at (nginx origin).
+      # Used for CORS and post-login redirect.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5174}
+      CACHE_MAX_SIZE_MB: ${CACHE_MAX_SIZE_MB:-128}
+      # Limit which repositories are visible (optional)
+      GITHUB_ORG: ${GITHUB_ORG:-}
+      GITHUB_REPOS: ${GITHUB_REPOS:-}
+      GITHUB_SCOPE: ${GITHUB_SCOPE:-}
+      # Trust X-Forwarded-For from nginx for accurate rate-limit key resolution
+      TRUST_PROXY: "true"
+      # Set to "true" only when serving over HTTPS (controls Secure cookie flag)
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # CA certificate for outbound HTTPS (e.g. corporate environment)
+      CA_CERT_PATH: ${CA_CERT_PATH:-}
+      CA_CERT_BASE64: ${CA_CERT_BASE64:-}
+      # Corporate HTTP proxy
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      # Mount CA cert file if CA_CERT_HOST_FILE is set; falls back to /dev/null (no-op)
+      - ${CA_CERT_HOST_FILE:-/dev/null}:/run/secrets/ca.pem:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/system/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Docker applies exponential backoff between restarts (up to ~100s),
+    # so rapid crash loops are throttled automatically.
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    ports:
+      - "${WEB_PORT:-5174}:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped

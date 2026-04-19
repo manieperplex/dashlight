@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # ── GitHub Actions ──────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # ── Docker images (server) ──────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/packages/server"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  # ── Docker images (web) ─────────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/packages/web"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  # npm dependencies are managed by Renovate (see renovate.json).
+  # Renovate supports pnpm catalog: protocol which Dependabot does not.

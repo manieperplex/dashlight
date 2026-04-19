@@ -1,0 +1,113 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabled": false,
+  "baseBranches": ["develop"],
+  "labels": ["dependencies"],
+  "pnpm": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "catalog: TypeScript",
+      "matchFileNames": ["pnpm-workspace.yaml", "package.json", "packages/*/package.json"],
+      "matchPackageNames": ["typescript"],
+      "groupName": "catalog-typescript",
+      "addLabels": ["root"]
+    },
+    {
+      "description": "catalog: ESLint",
+      "matchFileNames": ["pnpm-workspace.yaml", "package.json", "packages/*/package.json"],
+      "matchPackageNames": ["eslint", "typescript-eslint"],
+      "groupName": "catalog-eslint",
+      "addLabels": ["root"]
+    },
+    {
+      "description": "catalog: Testing",
+      "matchFileNames": ["pnpm-workspace.yaml", "package.json", "packages/*/package.json"],
+      "matchPackageNames": ["vitest", "@vitest/**"],
+      "groupName": "catalog-testing",
+      "addLabels": ["root"]
+    },
+    {
+      "description": "server: @types/*",
+      "matchFileNames": ["packages/server/package.json"],
+      "matchPackagePatterns": ["^@types/"],
+      "groupName": "server-types",
+      "addLabels": ["server"]
+    },
+    {
+      "description": "server: all other deps",
+      "matchFileNames": ["packages/server/package.json"],
+      "matchPackagePatterns": [".*"],
+      "excludePackageNames": ["typescript", "eslint", "typescript-eslint", "vitest", "@vitest/**"],
+      "excludePackagePatterns": ["^@types/"],
+      "addLabels": ["server"]
+    },
+    {
+      "description": "web: TanStack (excluding router-vite-plugin)",
+      "matchFileNames": ["packages/web/package.json"],
+      "matchPackagePatterns": ["^@tanstack/"],
+      "excludePackageNames": ["@tanstack/router-vite-plugin"],
+      "groupName": "web-tanstack",
+      "addLabels": ["web"]
+    },
+    {
+      "description": "web: Vite build tooling",
+      "matchFileNames": ["packages/web/package.json"],
+      "matchPackageNames": ["vite", "@tanstack/router-vite-plugin"],
+      "matchPackagePatterns": ["^@vitejs/"],
+      "groupName": "web-vite-build",
+      "addLabels": ["web"]
+    },
+    {
+      "description": "web: Testing",
+      "matchFileNames": ["packages/web/package.json"],
+      "matchPackageNames": ["jsdom"],
+      "matchPackagePatterns": ["^@testing-library/"],
+      "groupName": "web-testing",
+      "addLabels": ["web"]
+    },
+    {
+      "description": "web: React",
+      "matchFileNames": ["packages/web/package.json"],
+      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "groupName": "web-react",
+      "addLabels": ["web"]
+    },
+    {
+      "description": "web: @types/* (excluding React types)",
+      "matchFileNames": ["packages/web/package.json"],
+      "matchPackagePatterns": ["^@types/"],
+      "excludePackageNames": ["@types/react", "@types/react-dom"],
+      "groupName": "web-types",
+      "addLabels": ["web"]
+    },
+    {
+      "description": "web: all other deps",
+      "matchFileNames": ["packages/web/package.json"],
+      "matchPackagePatterns": [".*"],
+      "excludePackageNames": [
+        "typescript", "eslint", "typescript-eslint", "vitest",
+        "react", "react-dom", "@types/react", "@types/react-dom",
+        "jsdom", "vite", "@tanstack/router-vite-plugin"
+      ],
+      "excludePackagePatterns": ["^@tanstack/", "^@vitejs/", "^@testing-library/", "^@types/", "^@vitest/"],
+      "addLabels": ["web"]
+    },
+    {
+      "description": "GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "addLabels": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "Docker",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "addLabels": ["docker"],
+      "groupName": "docker"
+    }
+  ],
+  "schedule": ["on monday"],
+  "prCreation": "not-pending"
+}
