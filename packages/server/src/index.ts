@@ -6,7 +6,7 @@ import { accessLog } from "./middleware/access-log.js"
 import { log } from "./lib/logger.js"
 import { rateLimitKey } from "./lib/rate-limit-key.js"
 import { validateSessionSecret } from "./lib/jwt.js"
-import { logCertStatus } from "./lib/certs.js"
+import { logStartupDiagnostics } from "./lib/startup-log.js"
 import { securityHeaders } from "./middleware/security.js"
 import authRoutes from "./routes/auth.js"
 import proxyRoutes from "./routes/proxy.js"
@@ -28,7 +28,7 @@ for (const key of requiredEnv) {
   }
 }
 
-logCertStatus()
+logStartupDiagnostics()
 
 // ── App setup ─────────────────────────────────────────────────────────────────
 const app = new Hono()

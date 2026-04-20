@@ -1,12 +1,15 @@
-import { request } from "undici"
-import { buildUndiciAgent } from "./certs.js"
+import { request, EnvHttpProxyAgent } from "undici"
 import { log } from "./logger.js"
 
 const GITHUB_API_BASE = "https://api.github.com"
 
-// Single shared agent — carries the custom CA cert and proxy config for all
-// outbound HTTPS. Exported so auth.ts can use it for the token exchange too.
-export const agent = buildUndiciAgent()
+// Single shared agent for all outbound HTTPS — exported so auth.ts can reuse it.
+//
+// NOTE: NODE_EXTRA_CA_CERTS is baked into the image at build time via EXTRA_CA_CERTS_B64.
+// Node.js loads it into its default TLS context at process startup; EnvHttpProxyAgent
+// inherits that context automatically — no explicit ca option is needed here.
+// Proxy env vars (HTTPS_PROXY, HTTP_PROXY, NO_PROXY) are also picked up automatically.
+export const agent = new EnvHttpProxyAgent()
 
 const RETRY_DELAYS_MS = [500, 1000, 2000]
 // 429 is intentionally excluded: rate-limit windows are hourly, short retries are useless

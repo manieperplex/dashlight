@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: packages/server/Dockerfile
+      args:
+        # Build-time CA certificate — base64-encoded PEM bundle (see env.example).
+        # Pass via: docker compose --env-file .docker-certs.env build
+        EXTRA_CA_CERTS_B64: ${EXTRA_CA_CERTS_B64:-}
     # Not exposed publicly — nginx is the only ingress point.
     # Uncomment the line below to expose the server port for local debugging:
     # ports:
@@ -25,19 +29,14 @@ services:
       TRUST_PROXY: "true"
       # Set to "true" only when serving over HTTPS (controls Secure cookie flag)
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      # CA certificate for outbound HTTPS (e.g. corporate environment)
-      CA_CERT_PATH: ${CA_CERT_PATH:-}
-      CA_CERT_BASE64: ${CA_CERT_BASE64:-}
-      # Corporate HTTP proxy
+      # Corporate HTTP proxy (optional — picked up automatically by EnvHttpProxyAgent)
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       HTTP_PROXY: ${HTTP_PROXY:-}
       NO_PROXY: ${NO_PROXY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-    volumes:
-      # Mount CA cert file if CA_CERT_HOST_FILE is set; falls back to /dev/null (no-op)
-      - ${CA_CERT_HOST_FILE:-/dev/null}:/run/secrets/ca.pem:ro
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/system/health"]
+      # Uses Node's built-in fetch — no curl dependency in the minimal runtime image.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/system/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -50,6 +49,8 @@ services:
     build:
       context: .
       dockerfile: packages/web/Dockerfile
+      args:
+        EXTRA_CA_CERTS_B64: ${EXTRA_CA_CERTS_B64:-}
     ports:
       - "${WEB_PORT:-5174}:80"
     depends_on:

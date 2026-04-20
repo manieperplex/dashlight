@@ -22,3 +22,6 @@ Thumbs.db
 
 # pnpm
 pnpm-debug.log
+
+# Certificate build args — contains base64-encoded PEM data, never commit
+.docker-certs.env

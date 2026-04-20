@@ -8,6 +8,25 @@ ENV NODE_OPTIONS="--dns-result-order=ipv4first --no-network-family-autoselection
 
 WORKDIR /app
 
+# ── Build-time CA certificate (optional) ──────────────────────────────────────
+# Pass EXTRA_CA_CERTS_B64 (base64-encoded PEM bundle) to inject corporate CA
+# trust before any networked build step runs (corepack, pnpm install, tsc).
+# If unset the build continues with the base image trust store only.
+ARG EXTRA_CA_CERTS_B64
+ENV DASHLIGHT_EXTRA_CA_FILE="/opt/dashlight/extra-ca-certificates.pem"
+ENV DASHLIGHT_CA_BUNDLE="/opt/dashlight/ca-certificates-with-extra.pem"
+ENV SSL_CERT_FILE="/opt/dashlight/ca-certificates-with-extra.pem"
+ENV NODE_EXTRA_CA_CERTS="/opt/dashlight/extra-ca-certificates.pem"
+
+RUN mkdir -p /opt/dashlight && \
+    cp /etc/ssl/certs/ca-certificates.crt "$DASHLIGHT_CA_BUNDLE" && \
+    if [ -n "$EXTRA_CA_CERTS_B64" ]; then \
+      printf '%s' "$EXTRA_CA_CERTS_B64" | base64 -d > "$DASHLIGHT_EXTRA_CA_FILE" && \
+      cat "$DASHLIGHT_EXTRA_CA_FILE" >> "$DASHLIGHT_CA_BUNDLE"; \
+    else \
+      : > "$DASHLIGHT_EXTRA_CA_FILE"; \
+    fi
+
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 # Copy workspace manifests first for layer caching
@@ -27,12 +46,20 @@ RUN pnpm deploy --filter @dashlight/server --prod /standalone
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM node:24.3.0-alpine3.22 AS runner
 
-# Upgrade OS packages to patch any CVEs present in the pinned base image,
-# then install only what the healthcheck needs.
+# Upgrade OS packages to patch any CVEs present in the pinned base image.
 RUN apk upgrade --no-cache && \
-    addgroup -S dashlight && adduser -S dashlight -G dashlight && \
-    apk add --no-cache curl
+    addgroup -S dashlight && adduser -S dashlight -G dashlight
+
 WORKDIR /app
+
+# Copy cert bundle from builder so the runtime Node process inherits build-time trust.
+# NODE_EXTRA_CA_CERTS points to the extra-only PEM; SSL_CERT_FILE points to the
+# merged bundle (system roots + extra) for non-Node TLS clients.
+COPY --from=builder /opt/dashlight/ /opt/dashlight/
+ENV DASHLIGHT_EXTRA_CA_FILE="/opt/dashlight/extra-ca-certificates.pem"
+ENV DASHLIGHT_CA_BUNDLE="/opt/dashlight/ca-certificates-with-extra.pem"
+ENV SSL_CERT_FILE="/opt/dashlight/ca-certificates-with-extra.pem"
+ENV NODE_EXTRA_CA_CERTS="/opt/dashlight/extra-ca-certificates.pem"
 
 # pnpm deploy gives us a clean directory: package.json + node_modules + dist
 COPY --from=builder /standalone ./
@@ -40,7 +67,8 @@ COPY --from=builder /standalone ./
 USER dashlight
 EXPOSE 8080
 
+# Use Node's built-in fetch — no curl dependency required in the minimal runtime image.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD curl -fsS http://localhost:8080/system/health || exit 1
+  CMD node -e "fetch('http://localhost:8080/system/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "dist/index.js"]

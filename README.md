@@ -118,9 +118,7 @@ All variables are set in `.env` (copy from `env.example`).
 | `PORT` | `8080` | Internal server listen port (not exposed publicly) |
 | `LOG_LEVEL` | `info` | Server log verbosity: `debug` \| `info` \| `warn` \| `error` |
 | `CACHE_MAX_SIZE_MB` | `128` | In-memory LRU cache limit |
-| `CA_CERT_HOST_FILE` | — | Host path to a PEM file — Docker Compose mounts it into the server container |
-| `CA_CERT_PATH` | — | Path the server reads inside the container (use `/run/secrets/ca.pem` with the mount above) |
-| `CA_CERT_BASE64` | — | Base64-encoded PEM — alternative to a file mount |
+| `EXTRA_CA_CERTS_B64` | — | Build-time only. Base64-encoded PEM bundle injected into the image during `docker compose build`. See [Corporate CA certificate](#corporate-ca-certificate). |
 | `HTTPS_PROXY` / `HTTP_PROXY` | — | Corporate HTTP proxy for outbound requests to `api.github.com` |
 | `NO_PROXY` | — | Comma-separated hosts to bypass the proxy |
 | `TRUST_PROXY` | `true` | Trust `X-Forwarded-For` from nginx for rate limiting (set by Compose automatically) |
@@ -191,34 +189,53 @@ If your reverse proxy terminates TLS and forwards to port 80 of the `web` contai
 
 ### Corporate CA certificate
 
-If outbound HTTPS to `api.github.com` requires a custom CA (e.g. corporate TLS inspection), the certificate must be provided to the server container. The CA cert applies to all outbound connections — including the GitHub OAuth token exchange and all GitHub API calls.
+If your Docker build environment intercepts outbound TLS (e.g. corporate proxy), you must inject the CA bundle at **build time** so that `pnpm install` and `tsc` can reach the registry.
 
-**Option A — inline base64 (works everywhere)**
+The certificate is baked into the image during `docker compose build` — it is not a runtime environment variable and does not need to be passed when starting containers.
 
-The simplest option. Works with Docker Compose, plain `docker run`, Kubernetes, and any other runtime because the cert travels as an environment variable — no volume mount required.
+**Single certificate**
 
 ```bash
-CA_CERT_BASE64=$(base64 < my-ca.pem)   # generate the value
+# Encode the PEM file
+# macOS
+base64 < my-ca.pem > /tmp/bundle.b64
+
+# Linux (suppress line wrapping — required for Docker build args)
+base64 -w0 < my-ca.pem > /tmp/bundle.b64
+
+# Write the build-arg env file
+echo "EXTRA_CA_CERTS_B64=$(cat /tmp/bundle.b64)" > .docker-certs.env
 ```
 
-Set it in `.env`:
+**Multiple certificates**
 
-```env
-CA_CERT_BASE64=<output from above>
+Concatenate all PEM files into one bundle before encoding — the Dockerfile appends the entire bundle to the system root store, so all CAs in the bundle will be trusted:
+
+```bash
+# Concatenate and encode
+# macOS
+cat ca-1.pem ca-2.pem ca-3.pem | base64 > /tmp/bundle.b64
+
+# Linux
+cat ca-1.pem ca-2.pem ca-3.pem | base64 -w0 > /tmp/bundle.b64
+
+# Write the build-arg env file
+echo "EXTRA_CA_CERTS_B64=$(cat /tmp/bundle.b64)" > .docker-certs.env
 ```
 
-**Option B — file mount via Docker Compose**
+**Build and run**
 
-Keeps the PEM file on the host rather than embedding it in `.env`. Only works when started with `docker compose` — the mount is defined in `docker-compose.yml` and will not happen with a plain `docker run`.
+```bash
+# Build only
+docker compose --env-file .env --env-file .docker-certs.env build
 
-```env
-# Host path (docker-compose.yml reads this to create the volume mount)
-CA_CERT_HOST_FILE=./certs/my-ca.pem
-# Path the server reads inside the container
-CA_CERT_PATH=/run/secrets/ca.pem
+# Build + start in one go
+docker compose --env-file .env --env-file .docker-certs.env up -d
 ```
 
-If you run the container without Compose and set only `CA_CERT_PATH`, the server will warn at startup that the file cannot be read and continue without the custom CA.
+> `.docker-certs.env` is gitignored — never commit it. It contains your CA certificates encoded as base64.
+
+If the build environment does **not** intercept TLS (home network, CI with public access), omit `--env-file .docker-certs.env` entirely — the build proceeds with the base image trust store only.
 
 ---
 
@@ -240,7 +257,7 @@ Check `GITHUB_REPOS` and `GITHUB_ORG` in `.env`. If both are unset, all repos th
 The `web` container waits for the `server` container to pass its health check before starting. If the server exits immediately (missing required env var, bad `SESSION_SECRET`), run `docker compose logs server` to see the startup error.
 
 **GitHub API calls fail in a corporate network**
-Set `HTTPS_PROXY` (and optionally `HTTP_PROXY`, `NO_PROXY`) in `.env`. These are passed to the server at runtime for all outbound calls to `api.github.com`. If the corporate proxy uses a private CA, also configure the CA cert (see above).
+Set `HTTPS_PROXY` (and optionally `HTTP_PROXY`, `NO_PROXY`) in `.env`. These are passed to the server at runtime for all outbound calls to `api.github.com`. If the corporate proxy uses a private CA, inject it at build time via `EXTRA_CA_CERTS_B64` (see [Corporate CA certificate](#corporate-ca-certificate)).
 
 ---
 

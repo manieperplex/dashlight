@@ -102,8 +102,8 @@ auth.get("/callback", async (c) => {
   c.header("Set-Cookie", `pkce_verifier=; ${clearCookieFlags}`, { append: true })
 
   // Exchange code for token.
-  // Uses the shared undici agent so the custom CA cert and corporate proxy
-  // (CA_CERT_BASE64 / CA_CERT_PATH / HTTPS_PROXY) apply here too.
+  // Uses the shared undici agent — NODE_EXTRA_CA_CERTS (baked in at build time)
+  // and HTTPS_PROXY / HTTP_PROXY / NO_PROXY are picked up automatically.
   let tokenData: GitHubTokenResponse
   try {
     const tokenRes = await request(GITHUB_OAUTH_TOKEN, {

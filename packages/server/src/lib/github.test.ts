@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { githubFetch, GitHubApiError, GitHubNotFoundError, GitHubRateLimitError } from "./github.js"
+import { githubFetch, GitHubApiError, GitHubNotFoundError, GitHubRateLimitError, agent } from "./github.js"
 
-// Mock undici at the module level
+// Mock undici — spread actual so EnvHttpProxyAgent is the real class (needed for instanceof
+// check on agent), override only request to intercept network calls in tests.
 vi.mock("undici", async (importOriginal) => {
   const actual = await importOriginal<typeof import("undici")>()
   return {
@@ -10,14 +11,7 @@ vi.mock("undici", async (importOriginal) => {
   }
 })
 
-// Mock certs so no real network/file access happens
-vi.mock("./certs.js", () => ({
-  buildUndiciAgent: () => ({}),
-  caCert: undefined,
-  logCertStatus: () => {},
-}))
-
-import { request } from "undici"
+import { request, EnvHttpProxyAgent } from "undici"
 
 const mockRequest = vi.mocked(request)
 
@@ -37,6 +31,17 @@ function makeResponse(status: number, body: unknown, headers: Record<string, str
 
 beforeEach(() => {
   vi.clearAllMocks()
+})
+
+// ── agent ─────────────────────────────────────────────────────────────────────
+
+describe("agent", () => {
+  it("is an EnvHttpProxyAgent instance", () => {
+    // EnvHttpProxyAgent reads HTTPS_PROXY, HTTP_PROXY, and NO_PROXY automatically.
+    // NODE_EXTRA_CA_CERTS (baked in at build time) is inherited via Node's default
+    // TLS context — no explicit ca option is needed on the agent.
+    expect(agent).toBeInstanceOf(EnvHttpProxyAgent)
+  })
 })
 
 describe("githubFetch", () => {
