@@ -9,6 +9,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r --parallel test",
+    "certs:docker-env": "node scripts/generate-docker-certs-env.mjs",
     "test:web": "pnpm --filter @dashlight/web test",
     "test:server": "pnpm --filter @dashlight/server test",
     "test:coverage": "pnpm -r --parallel test:coverage",
