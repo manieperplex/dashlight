@@ -416,7 +416,7 @@ function BranchHistoryCard({
       <CardHeader
         title={title}
         actions={
-          <Link to="/repositories/$owner/$repo/runs" params={{ owner, repo }} search={isSchedule ? {} : { branch }} className="btn btn-sm">
+          <Link to="/repositories/$owner/$repo/runs" params={{ owner, repo }} search={isSchedule ? {} : { q: branch }} className="btn btn-sm">
             View all
           </Link>
         }

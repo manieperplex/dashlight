@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { getRepo, getRepoScore, getWorkflows, getRuns } from "../../api/index.js"
 import { StatusBadge, TierBadge } from "../../components/ui/Badge.js"
@@ -30,11 +30,17 @@ export function triggersFromRuns(runs: WorkflowRun[]): Map<number, string[]> {
 
 function RepositoryDetail() {
   const { owner, repo } = Route.useParams()
+  const childMatches = useChildMatches()
 
+  // Always call useQuery — hooks must not be called conditionally.
   const { data: repoData, isLoading: repoLoading } = useQuery({
     queryKey: ["repo", owner, repo],
     queryFn: () => getRepo(owner, repo),
   })
+
+  // When a child route is active (e.g. /runs, /runs/$runId), render it
+  // exclusively. Outlet renders nothing when no child is matched.
+  if (childMatches.length > 0) return <Outlet />
 
   if (repoLoading) return <PageSpinner />
   if (!repoData) return <p className="empty-state">Repository not found.</p>
@@ -165,8 +171,23 @@ export function WorkflowsCard({ owner, repo }: { owner: string; repo: string }) 
                 return (
                   <tr key={w.id}>
                     <td style={{ fontWeight: 500 }}>
-                      <a href={w.htmlUrl} target="_blank" rel="noopener noreferrer">
+                      <Link
+                        to="/repositories/$owner/$repo/runs"
+                        params={{ owner, repo }}
+                        search={{ q: w.name }}
+                      >
                         {w.name}
+                      </Link>
+                      {" "}
+                      <a
+                        href={w.htmlUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open workflow on GitHub"
+                        className="text-muted"
+                        style={{ fontSize: "0.8em", textDecoration: "none" }}
+                      >
+                        ↗
                       </a>
                     </td>
                     <td className="mono text-small text-muted">{w.path}</td>

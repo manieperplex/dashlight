@@ -64,6 +64,26 @@ describe("StatusBadge", () => {
     const { container } = render(<StatusBadge status="in_progress" conclusion={null} />)
     expect(container.querySelector(".spinner")).toBeInTheDocument()
   })
+
+  it("dotOnly: does not render the label text", () => {
+    render(<StatusBadge status="completed" conclusion="success" dotOnly />)
+    expect(screen.queryByText("Success")).not.toBeInTheDocument()
+  })
+
+  it("dotOnly: moves label into title tooltip on the badge", () => {
+    const { container } = render(<StatusBadge status="completed" conclusion="failure" dotOnly />)
+    expect(container.querySelector(".badge")).toHaveAttribute("title", "Failure")
+  })
+
+  it("dotOnly: still renders the dot element", () => {
+    const { container } = render(<StatusBadge status="completed" conclusion="success" dotOnly />)
+    expect(container.querySelector("span[style]")).toBeInTheDocument()
+  })
+
+  it("default (no dotOnly): does not set title on badge", () => {
+    const { container } = render(<StatusBadge status="completed" conclusion="success" />)
+    expect(container.querySelector(".badge")).not.toHaveAttribute("title")
+  })
 })
 
 describe("TierBadge", () => {

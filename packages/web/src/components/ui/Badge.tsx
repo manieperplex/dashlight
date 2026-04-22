@@ -6,18 +6,25 @@ interface BadgeProps {
   children: React.ReactNode
   variant?: StatusVariant | "neutral"
   className?: string
+  title?: string
 }
 
-export function Badge({ children, variant = "neutral", className }: BadgeProps) {
-  return <span className={`badge badge-${variant} ${className ?? ""}`}>{children}</span>
+export function Badge({ children, variant = "neutral", className, title }: BadgeProps) {
+  return (
+    <span className={`badge badge-${variant} ${className ?? ""}`} title={title}>
+      {children}
+    </span>
+  )
 }
 
 interface StatusBadgeProps {
   status: RunStatus
   conclusion: RunConclusion
+  /** Show only the coloured dot; label text is moved to a title tooltip. */
+  dotOnly?: boolean
 }
 
-export function StatusBadge({ status, conclusion }: StatusBadgeProps) {
+export function StatusBadge({ status, conclusion, dotOnly = false }: StatusBadgeProps) {
   const variant = runStatusVariant(status, conclusion)
   const label = runStatusLabel(status, conclusion)
 
@@ -38,9 +45,9 @@ export function StatusBadge({ status, conclusion }: StatusBadgeProps) {
     )
 
   return (
-    <Badge variant={variant}>
+    <Badge variant={variant} title={dotOnly ? label : undefined}>
       {dot}
-      {label}
+      {!dotOnly && label}
     </Badge>
   )
 }
