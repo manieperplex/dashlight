@@ -74,6 +74,27 @@ GITHUB_ORG=my-company
 GITHUB_REPOS=my-company/api,my-company/web
 ```
 
+**3b. (Optional) Private npm registry via `.npmrc`**
+
+If your organization uses a private npm registry (for example Artifactory, Nexus, or GitHub Packages), configure a project-level `.npmrc` in the repository root.
+
+Use placeholder values like this and replace with your own internal settings:
+
+```ini
+registry=https://registry.example.internal/api/npm/npm-virtual/
+always-auth=true
+//registry.example.internal/api/npm/npm-virtual/:_auth=<base64_of_username_colon_token>
+//registry.example.internal/api/npm/npm-virtual/:email=devnull@example.internal
+```
+
+Notes:
+
+- Keep the host/path in auth lines exactly aligned with the `registry=` URL path.
+- Prefer a dedicated robot/service account token with least required permissions.
+- Do not commit real credentials. Keep real auth values in local-only files or CI secrets.
+
+If your registry uses a private CA, also follow [Corporate CA certificate](#corporate-ca-certificate) so Docker build stages can trust TLS during `pnpm install`.
+
 **4. Build and start**
 
 ```bash
@@ -193,45 +214,79 @@ If your Docker build environment intercepts outbound TLS (e.g. corporate proxy),
 
 The certificate is baked into the image during `docker compose build` — it is not a runtime environment variable and does not need to be passed when starting containers.
 
+Dashlight includes a helper script that normalizes one or more certificate files and writes `.docker-certs.env` for you:
+
+```bash
+pnpm certs:docker-env -- <cert1> [cert2 ...]
+```
+
+The script supports both input formats automatically (per file):
+
+- Real PEM text (`-----BEGIN CERTIFICATE----- ...`)
+- Base64-wrapped PEM text (content starts with `LS0t...`)
+
+It combines all provided certs in memory and writes a single line to `.docker-certs.env`:
+
+```env
+EXTRA_CA_CERTS_B64=<single-base64-encoded-PEM-bundle>
+```
+
+No intermediate combined certificate file is created.
+
+**How the Docker TLS env vars are used**
+
+- `DASHLIGHT_EXTRA_CA_FILE`: file containing only injected custom CA certificates.
+- `DASHLIGHT_CA_BUNDLE`: merged CA bundle (system roots + custom certs).
+- `SSL_CERT_FILE`: points OpenSSL-based clients to the merged bundle.
+- `NODE_EXTRA_CA_CERTS`: tells Node.js to append custom certs to Node's default trust.
+
+This split keeps trust explicit and debuggable: custom certs stay isolated, while runtime/build tools still retain default public CA trust.
+
 **Single certificate**
 
 ```bash
-# Encode the PEM file
-# macOS
-base64 < my-ca.pem > /tmp/bundle.b64
-
-# Linux (suppress line wrapping — required for Docker build args)
-base64 -w0 < my-ca.pem > /tmp/bundle.b64
-
-# Write the build-arg env file
-echo "EXTRA_CA_CERTS_B64=$(cat /tmp/bundle.b64)" > .docker-certs.env
+pnpm certs:docker-env -- my-ca.pem
 ```
 
 **Multiple certificates**
 
-Concatenate all PEM files into one bundle before encoding — the Dockerfile appends the entire bundle to the system root store, so all CAs in the bundle will be trusted:
+Pass all cert files as arguments. The script normalizes and combines them:
 
 ```bash
-# Concatenate and encode
-# macOS
-cat ca-1.pem ca-2.pem ca-3.pem | base64 > /tmp/bundle.b64
-
-# Linux
-cat ca-1.pem ca-2.pem ca-3.pem | base64 -w0 > /tmp/bundle.b64
-
-# Write the build-arg env file
-echo "EXTRA_CA_CERTS_B64=$(cat /tmp/bundle.b64)" > .docker-certs.env
+pnpm certs:docker-env -- ca-1.pem ca-2.pem ca-3.pem
 ```
 
-**Build and run**
+**Quick validation (optional)**
+
+`EXTRA_CA_CERTS_B64` should decode once to PEM and should not require a second decode:
 
 ```bash
-# Build only
-docker compose --env-file .env --env-file .docker-certs.env build
-
-# Build + start in one go
-docker compose --env-file .env --env-file .docker-certs.env up -d
+val=$(awk -F= '/^EXTRA_CA_CERTS_B64=/{print substr($0,index($0,"=")+1)}' .docker-certs.env)
+printf '%s' "$val" | base64 -d | head -n 2
 ```
+
+Expected output starts with:
+
+```text
+-----BEGIN CERTIFICATE-----
+```
+
+**Build and run (recommended sequence)**
+
+```bash
+docker compose --env-file .env --env-file .docker-certs.env build --no-cache
+docker compose --env-file .env --env-file .docker-certs.env up -d --force-recreate
+```
+
+**Verify certificate in the running server container (optional)**
+
+Use this to quickly confirm that the runtime extra CA file exists and begins with PEM content:
+
+```bash
+docker compose exec -T server sh -lc "head -c 40 /opt/dashlight/extra-ca-certificates.pem && echo"
+```
+
+> `docker compose up` in this environment does not support `--no-cache`. Use `--no-cache` only with `docker compose build`.
 
 > `.docker-certs.env` is gitignored — never commit it. It contains your CA certificates encoded as base64.
 
