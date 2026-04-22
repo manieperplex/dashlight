@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { lazy, Suspense, useState, Fragment } from "react"
+import { useState, Fragment } from "react"
 import {
   getRun, getRunJobs, getRuns, getRunArtifacts, getJobLogs,
   rerunWorkflow, rerunFailedJobs, cancelRun,
@@ -9,13 +9,11 @@ import { StatusBadge } from "../../components/ui/Badge.js"
 import { EventBadge } from "../../components/ui/EventBadge.js"
 import { Button } from "../../components/ui/Button.js"
 import { Card, CardHeader } from "../../components/ui/Card.js"
-import { PageSpinner, Spinner } from "../../components/ui/Spinner.js"
+import { PageSpinner } from "../../components/ui/Spinner.js"
 import { formatRelativeTime, formatDuration, formatDateTime } from "../../lib/utils.js"
 import type { WorkflowRun, WorkflowJob, JobStep, RunArtifact } from "../../types/index.js"
 
-const WorkflowDAG = lazy(() =>
-  import("../../components/dag/WorkflowDAG.js").then((m) => ({ default: m.WorkflowDAG }))
-)
+import { WorkflowDAG } from "../../components/dag/WorkflowDAG.js"
 
 export const Route = createFileRoute("/_app/repositories/$owner/$repo/runs/$runId")({
   component: RunDetail,
@@ -95,8 +93,10 @@ function RunDetail() {
         <div className="flex-center gap-2" style={{ marginBottom: "0.5rem" }}>
           <Link to="/repositories" className="text-muted text-small">Repositories</Link>
           <span className="text-muted text-small">/</span>
+          <span className="text-muted text-small">{owner}</span>
+          <span className="text-muted text-small">/</span>
           <Link to="/repositories/$owner/$repo" params={{ owner, repo }} className="text-muted text-small">
-            {owner}/{repo}
+            {repo}
           </Link>
           <span className="text-muted text-small">/</span>
           <Link to="/repositories/$owner/$repo/runs" params={{ owner, repo }} className="text-muted text-small">
@@ -138,7 +138,7 @@ function RunDetail() {
             {!isActive && (
               <>
                 <Button size="sm" loading={rerunMutation.isPending} onClick={() => rerunMutation.mutate()}>
-                  Re-run all
+                  Re-run all jobs
                 </Button>
                 {hasFailed && (
                   <Button size="sm" loading={rerunFailedMutation.isPending} onClick={() => rerunFailedMutation.mutate()}>
@@ -162,9 +162,7 @@ function RunDetail() {
         {jobs && jobs.length > 0 && (
           <Card>
             <CardHeader title="Job DAG" />
-            <Suspense fallback={<div className="flex-center gap-2" style={{ padding: "2rem" }}><Spinner /> Loading DAG…</div>}>
-              <WorkflowDAG jobs={jobs} />
-            </Suspense>
+            <WorkflowDAG jobs={jobs} />
           </Card>
         )}
 
