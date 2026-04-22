@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import type { WorkflowRun } from "../../types/index.js"
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -49,8 +49,8 @@ vi.mock("../../components/ui/EventBadge.js", () => ({
 
 import React from "react"
 import { useQuery, useQueries } from "@tanstack/react-query"
-import { Route, mergeAndSortRuns, filterRuns, AllRunsTable } from "./runs.js"
-import type { RunWithRepo } from "./runs.js"
+import { Route, mergeAndSortRuns, filterRuns, sortRuns, AllRunsTable } from "./runs.js"
+import type { RunWithRepo, SortKey } from "./runs.js"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -143,12 +143,19 @@ describe("AllRunsTable", () => {
     render(<AllRunsTable runs={[entry(makeRun())]} />)
     expect(screen.getByText("Repository")).toBeInTheDocument()
     expect(screen.getByText("Run")).toBeInTheDocument()
+    expect(screen.getByText("Workflow")).toBeInTheDocument()
     expect(screen.getByText("Branch / Commit")).toBeInTheDocument()
     expect(screen.getByText("Event")).toBeInTheDocument()
     expect(screen.getByText("Actor")).toBeInTheDocument()
     expect(screen.getByText("Status")).toBeInTheDocument()
     expect(screen.getByText("Duration")).toBeInTheDocument()
     expect(screen.getByText("Started")).toBeInTheDocument()
+  })
+
+  it("renders workflowName in each row", () => {
+    const run = makeRun({ workflowName: "Release Pipeline" })
+    render(<AllRunsTable runs={[entry(run)]} />)
+    expect(screen.getByText("Release Pipeline")).toBeInTheDocument()
   })
 
   it("renders one row per run", () => {
@@ -234,6 +241,52 @@ describe("AllRunsTable", () => {
     render(<AllRunsTable runs={[entry(run)]} />)
     expect(screen.queryByText(/×/)).not.toBeInTheDocument()
   })
+
+  it("all column headers are clickable", () => {
+    render(<AllRunsTable runs={[entry(makeRun())]} />)
+    for (const name of ["Repository", "Run", "Workflow", "Branch / Commit", "Event", "Actor", "Status", "Duration", "Started"]) {
+      expect(screen.getByRole("columnheader", { name })).toBeInTheDocument()
+    }
+  })
+
+  it("clicking a column header sorts rows by that column", () => {
+    const runs = [
+      entry(makeRun({ workflowName: "Zebra" })),
+      entry(makeRun({ workflowName: "Alpha" })),
+    ]
+    render(<AllRunsTable runs={runs} />)
+    fireEvent.click(screen.getByRole("columnheader", { name: "Workflow" }))
+    const rows = screen.getAllByRole("row").slice(1) // skip header
+    expect(rows[0]).toHaveTextContent("Alpha")
+    expect(rows[1]).toHaveTextContent("Zebra")
+  })
+
+  it("clicking the same header again reverses sort direction", () => {
+    const runs = [
+      entry(makeRun({ workflowName: "Alpha" })),
+      entry(makeRun({ workflowName: "Zebra" })),
+    ]
+    render(<AllRunsTable runs={runs} />)
+    const header = screen.getByRole("columnheader", { name: "Workflow" })
+    fireEvent.click(header) // first click: asc → Alpha, Zebra
+    fireEvent.click(header) // second click: desc → Zebra, Alpha
+    const rows = screen.getAllByRole("row").slice(1)
+    expect(rows[0]).toHaveTextContent("Zebra")
+    expect(rows[1]).toHaveTextContent("Alpha")
+  })
+
+  it("clicking a different header resets to that column's default direction", () => {
+    const runs = [
+      entry(makeRun({ workflowName: "Alpha", headBranch: "main" })),
+      entry(makeRun({ workflowName: "Zebra", headBranch: "develop" })),
+    ]
+    render(<AllRunsTable runs={runs} />)
+    // sort by branch asc: develop (Zebra), main (Alpha)
+    fireEvent.click(screen.getByRole("columnheader", { name: "Branch / Commit" }))
+    const rows = screen.getAllByRole("row").slice(1)
+    expect(rows[0]).toHaveTextContent("develop")
+    expect(rows[1]).toHaveTextContent("main")
+  })
 })
 
 // ── filterRuns ────────────────────────────────────────────────────────────────
@@ -302,6 +355,150 @@ describe("filterRuns", () => {
     const runs = [entry(makeRun({ actor: null }))]
     expect(() => filterRuns(runs, "alice")).not.toThrow()
     expect(filterRuns(runs, "alice")).toHaveLength(0)
+  })
+
+  it("filters by workflow name (case-insensitive)", () => {
+    const runs = [
+      entry(makeRun({ workflowName: "Deploy Production" })),
+      entry(makeRun({ workflowName: "CI" })),
+    ]
+    expect(filterRuns(runs, "deploy")).toHaveLength(1)
+    expect(filterRuns(runs, "DEPLOY PRODUCTION")).toHaveLength(1)
+  })
+
+  it("filters by partial workflow name", () => {
+    const runs = [
+      entry(makeRun({ workflowName: "Nightly Dependency audit" })),
+      entry(makeRun({ workflowName: "CI" })),
+    ]
+    expect(filterRuns(runs, "nightly")).toHaveLength(1)
+    expect(filterRuns(runs, "audit")).toHaveLength(1)
+  })
+})
+
+// ── sortRuns ──────────────────────────────────────────────────────────────────
+
+describe("sortRuns (AllRuns)", () => {
+  function s(key: SortKey, dir: "asc" | "desc" = "asc") {
+    return (runs: RunWithRepo[]) => sortRuns(runs, key, dir)
+  }
+
+  it("sorts by repository asc", () => {
+    const runs = [
+      { run: makeRun(), owner: "zeta", repo: "api" },
+      { run: makeRun(), owner: "acme", repo: "api" },
+    ]
+    expect(s("repository")(runs).map((r) => r.owner)).toEqual(["acme", "zeta"])
+  })
+
+  it("sorts by displayTitle asc", () => {
+    const runs = [
+      entry(makeRun({ displayTitle: "Zebra" })),
+      entry(makeRun({ displayTitle: "Alpha" })),
+    ]
+    expect(s("displayTitle")(runs).map((r) => r.run.displayTitle)).toEqual(["Alpha", "Zebra"])
+  })
+
+  it("sorts by workflowName asc", () => {
+    const runs = [
+      entry(makeRun({ workflowName: "Release" })),
+      entry(makeRun({ workflowName: "CI" })),
+    ]
+    expect(s("workflowName")(runs).map((r) => r.run.workflowName)).toEqual(["CI", "Release"])
+  })
+
+  it("sorts by event asc alphabetically", () => {
+    const runs = [
+      entry(makeRun({ event: "workflow_dispatch" })),
+      entry(makeRun({ event: "push" })),
+      entry(makeRun({ event: "schedule" })),
+    ]
+    expect(s("event")(runs).map((r) => r.run.event)).toEqual(["push", "schedule", "workflow_dispatch"])
+  })
+
+  it("sorts by status asc: running → failure → cancelled → success", () => {
+    const runs = [
+      entry(makeRun({ status: "completed", conclusion: "success" })),
+      entry(makeRun({ status: "in_progress", conclusion: null })),
+      entry(makeRun({ status: "completed", conclusion: "failure" })),
+    ]
+    const sorted = s("status")(runs)
+    expect(sorted.map((r) => r.run.conclusion ?? r.run.status)).toEqual([
+      "in_progress", "failure", "success",
+    ])
+  })
+
+  it("sorts by status desc: success → failure → running", () => {
+    const runs = [
+      entry(makeRun({ status: "in_progress", conclusion: null })),
+      entry(makeRun({ status: "completed", conclusion: "failure" })),
+      entry(makeRun({ status: "completed", conclusion: "success" })),
+    ]
+    const sorted = s("status", "desc")(runs)
+    expect(sorted.map((r) => r.run.conclusion ?? r.run.status)).toEqual([
+      "success", "failure", "in_progress",
+    ])
+  })
+
+  it("sorts by started desc (newest first)", () => {
+    const runs = [
+      entry(makeRun({ runStartedAt: "2024-01-01T00:00:00Z" })),
+      entry(makeRun({ runStartedAt: "2024-06-01T00:00:00Z" })),
+    ]
+    expect(s("started", "desc")(runs).map((r) => r.run.runStartedAt)).toEqual([
+      "2024-06-01T00:00:00Z",
+      "2024-01-01T00:00:00Z",
+    ])
+  })
+
+  it("sorts by headBranch asc", () => {
+    const runs = [
+      entry(makeRun({ headBranch: "main" })),
+      entry(makeRun({ headBranch: "develop" })),
+    ]
+    expect(s("headBranch")(runs).map((r) => r.run.headBranch)).toEqual(["develop", "main"])
+  })
+
+  it("sorts by actor login asc", () => {
+    const runs = [
+      entry(makeRun({ actor: { login: "zara", avatarUrl: "" } })),
+      entry(makeRun({ actor: { login: "alice", avatarUrl: "" } })),
+    ]
+    expect(s("actor")(runs).map((r) => r.run.actor?.login)).toEqual(["alice", "zara"])
+  })
+
+  it("sorts by duration desc (longer first)", () => {
+    const runs = [
+      entry(makeRun({ runStartedAt: "2024-01-01T10:00:00Z", updatedAt: "2024-01-01T10:02:00Z" })), // 2 min
+      entry(makeRun({ runStartedAt: "2024-01-01T10:00:00Z", updatedAt: "2024-01-01T10:10:00Z" })), // 10 min
+    ]
+    const sorted = s("duration", "desc")(runs)
+    const durations = sorted.map(
+      (r) => new Date(r.run.updatedAt).getTime() - new Date(r.run.runStartedAt!).getTime()
+    )
+    expect(durations[0]).toBeGreaterThan(durations[1]!)
+  })
+
+  it("sorts by duration asc (shorter first)", () => {
+    const runs = [
+      entry(makeRun({ runStartedAt: "2024-01-01T10:00:00Z", updatedAt: "2024-01-01T10:10:00Z" })), // 10 min
+      entry(makeRun({ runStartedAt: "2024-01-01T10:00:00Z", updatedAt: "2024-01-01T10:02:00Z" })), // 2 min
+    ]
+    const sorted = s("duration")(runs)
+    const durations = sorted.map(
+      (r) => new Date(r.run.updatedAt).getTime() - new Date(r.run.runStartedAt!).getTime()
+    )
+    expect(durations[0]).toBeLessThan(durations[1]!)
+  })
+
+  it("does not mutate the original array", () => {
+    const runs = [
+      entry(makeRun({ workflowName: "Z" })),
+      entry(makeRun({ workflowName: "A" })),
+    ]
+    const originalOrder = runs.map((r) => r.run.workflowName)
+    sortRuns(runs, "workflowName", "asc")
+    expect(runs.map((r) => r.run.workflowName)).toEqual(originalOrder)
   })
 })
 
@@ -381,6 +578,6 @@ describe("AllRuns page", () => {
     vi.mocked(useQuery).mockReturnValue({ data: [], isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([])
     render(<AllRuns />)
-    expect(screen.getByPlaceholderText(/Filter by repo/)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("Search here...")).toBeInTheDocument()
   })
 })
