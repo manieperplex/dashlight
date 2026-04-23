@@ -22,6 +22,26 @@ function makeJob(overrides: Partial<WorkflowJob> = {}): WorkflowJob {
   }
 }
 
+function addMs(base: string, ms: number): string {
+  return new Date(new Date(base).getTime() + ms).toISOString()
+}
+
+const BASE = "2024-01-01T10:00:00.000Z"
+
+/**
+ * Build N jobs with strictly sequential timestamps so buildDagLayout returns
+ * null (each level has exactly one job → maxRows = 1 → linear fallback).
+ */
+function makeSequentialJobs(names: string[]): WorkflowJob[] {
+  return names.map((name, i) =>
+    makeJob({
+      name,
+      startedAt:   addMs(BASE, i * 90_000),
+      completedAt: addMs(BASE, i * 90_000 + 60_000),
+    })
+  )
+}
+
 // ── sortJobs ──────────────────────────────────────────────────────────────────
 
 describe("sortJobs", () => {
@@ -61,23 +81,23 @@ describe("sortJobs", () => {
   })
 })
 
-// ── WorkflowDAG rendering ─────────────────────────────────────────────────────
+// ── WorkflowDAG — linear fallback ─────────────────────────────────────────────
 
-describe("WorkflowDAG", () => {
+describe("WorkflowDAG (linear)", () => {
   it("shows empty state when no jobs", () => {
     render(<WorkflowDAG jobs={[]} />)
     expect(screen.getByText("No jobs to display.")).toBeInTheDocument()
   })
 
   it("renders a pill for each job", () => {
-    const jobs = [makeJob({ name: "build" }), makeJob({ name: "test" })]
+    const jobs = makeSequentialJobs(["build", "test"])
     render(<WorkflowDAG jobs={jobs} />)
     expect(screen.getByText("build")).toBeInTheDocument()
     expect(screen.getByText("test")).toBeInTheDocument()
   })
 
   it("renders arrows between jobs", () => {
-    const jobs = [makeJob({ name: "check" }), makeJob({ name: "build" }), makeJob({ name: "deploy" })]
+    const jobs = makeSequentialJobs(["check", "build", "deploy"])
     render(<WorkflowDAG jobs={jobs} />)
     expect(screen.getAllByText("→")).toHaveLength(2)
   })
@@ -88,11 +108,65 @@ describe("WorkflowDAG", () => {
   })
 
   it("renders jobs in startedAt order", () => {
-    const a = makeJob({ name: "validate", startedAt: "2024-01-01T10:00:00Z" })
-    const b = makeJob({ name: "deploy",   startedAt: "2024-01-01T10:20:00Z" })
+    const a = makeJob({ name: "validate", startedAt: addMs(BASE, 0),       completedAt: addMs(BASE, 60_000) })
+    const b = makeJob({ name: "deploy",   startedAt: addMs(BASE, 90_000),  completedAt: addMs(BASE, 150_000) })
     render(<WorkflowDAG jobs={[b, a]} />)
     const pills = screen.getAllByText(/validate|deploy/)
     expect(pills[0]).toHaveTextContent("validate")
     expect(pills[1]).toHaveTextContent("deploy")
+  })
+
+  it("uses the dag-linear container for sequential jobs", () => {
+    const jobs = makeSequentialJobs(["build", "test"])
+    render(<WorkflowDAG jobs={jobs} />)
+    expect(screen.getByTestId("dag-linear")).toBeInTheDocument()
+    expect(screen.queryByTestId("dag-parallel")).not.toBeInTheDocument()
+  })
+})
+
+// ── WorkflowDAG — parallel layout ────────────────────────────────────────────
+
+describe("WorkflowDAG (parallel)", () => {
+  /**
+   * Diamond: build → [test, lint] → deploy
+   *
+   * build  started=T+0s,   completed=T+60s
+   * test   started=T+61s,  completed=T+121s   ← parallel with lint
+   * lint   started=T+62s,  completed=T+122s
+   * deploy started=T+123s, completed=T+183s
+   */
+  function makeDiamondJobs() {
+    return [
+      makeJob({ name: "build",  startedAt: BASE,                completedAt: addMs(BASE,  60_000) }),
+      makeJob({ name: "test",   startedAt: addMs(BASE,  61_000), completedAt: addMs(BASE, 121_000) }),
+      makeJob({ name: "lint",   startedAt: addMs(BASE,  62_000), completedAt: addMs(BASE, 122_000) }),
+      makeJob({ name: "deploy", startedAt: addMs(BASE, 123_000), completedAt: addMs(BASE, 183_000) }),
+    ]
+  }
+
+  it("uses the dag-parallel container for parallel jobs", () => {
+    render(<WorkflowDAG jobs={makeDiamondJobs()} />)
+    expect(screen.getByTestId("dag-parallel")).toBeInTheDocument()
+    expect(screen.queryByTestId("dag-linear")).not.toBeInTheDocument()
+  })
+
+  it("renders a pill for each job in parallel layout", () => {
+    render(<WorkflowDAG jobs={makeDiamondJobs()} />)
+    expect(screen.getByText("build")).toBeInTheDocument()
+    expect(screen.getByText("test")).toBeInTheDocument()
+    expect(screen.getByText("lint")).toBeInTheDocument()
+    expect(screen.getByText("deploy")).toBeInTheDocument()
+  })
+
+  it("renders SVG bezier edges in parallel layout", () => {
+    const { container } = render(<WorkflowDAG jobs={makeDiamondJobs()} />)
+    const paths = container.querySelectorAll("svg path")
+    // Diamond: 1×2 + 2×1 = 4 edges
+    expect(paths.length).toBe(4)
+  })
+
+  it("does not render text arrows in parallel layout", () => {
+    render(<WorkflowDAG jobs={makeDiamondJobs()} />)
+    expect(screen.queryByText("→")).not.toBeInTheDocument()
   })
 })
