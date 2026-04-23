@@ -1,11 +1,12 @@
 import { Hono } from "hono";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { signSession, verifySession } from "../lib/jwt.js";
 import { sessionCreate, sessionDestroy } from "../lib/session-store.js";
 import { request } from "undici";
 import { githubFetch, agent } from "../lib/github.js";
 import { log } from "../lib/logger.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { getPATIdentity } from "../lib/pat.js";
 import type { AuthEnv } from "../middleware/auth.js";
 
 const GITHUB_OAUTH_AUTHORIZE = "https://github.com/login/oauth/authorize";
@@ -31,6 +32,54 @@ interface GitHubTokenResponse {
 }
 
 const auth = new Hono<AuthEnv>();
+
+// Returns the current authentication mode so the frontend can adapt its UI.
+auth.get("/config", (c) => {
+  const patMode = !!process.env["GITHUB_TOKEN"]
+  const passwordRequired = patMode && !!process.env["APP_PASSWORD"]
+  return c.json({ mode: patMode ? "pat" : "oauth", passwordRequired })
+})
+
+// PAT + password login: verify app-level password and issue a stateless JWT.
+// Only active when both GITHUB_TOKEN and APP_PASSWORD are set.
+auth.post("/pat-login", async (c) => {
+  const appPassword = process.env["APP_PASSWORD"]
+  if (!process.env["GITHUB_TOKEN"] || !appPassword) {
+    return c.json({ error: "PAT+password mode is not configured" }, 400)
+  }
+
+  let body: { password?: string }
+  try {
+    body = await c.req.json<{ password?: string }>()
+  } catch {
+    return c.json({ error: "Invalid request body" }, 400)
+  }
+
+  const provided = body.password ?? ""
+  if (!checkPassword(provided, appPassword)) {
+    // Artificial delay — slows automated attacks to ≤2 attempts/second per IP
+    // even if the rate limiter is bypassed via IP rotation.
+    await new Promise<void>(resolve => setTimeout(resolve, 500))
+    return c.json({ error: "Invalid password" }, 401)
+  }
+
+  const identity = getPATIdentity()
+  const jwt = await signSession({
+    sub: identity.userId,
+    sessionId: "pat",
+    login: identity.login,
+    name: identity.name ?? identity.login,
+    avatarUrl: identity.avatarUrl,
+    pwh: passwordFingerprint(appPassword),
+  })
+
+  const secure = isSecure()
+  c.header(
+    "Set-Cookie",
+    `session=${jwt}; HttpOnly; SameSite=Strict; Max-Age=${7 * 24 * 3600}; Path=/${secure ? "; Secure" : ""}`,
+  )
+  return c.json({ ok: true })
+})
 
 auth.get("/login", (c) => {
   const clientId = process.env["GITHUB_CLIENT_ID"];
@@ -236,6 +285,26 @@ auth.get("/me", authMiddleware, (c) => {
 // Set COOKIE_SECURE=true explicitly when deploying behind TLS.
 function isSecure(): boolean {
   return process.env["COOKIE_SECURE"] === "true";
+}
+
+/**
+ * Short fingerprint of the app password embedded in PAT+password JWTs.
+ * When APP_PASSWORD changes, old tokens no longer match and are rejected.
+ * Uses first 22 base64url chars of SHA-256 (~132 bits) — enough to be unique,
+ * short enough to keep the JWT compact.
+ */
+function passwordFingerprint(password: string): string {
+  return createHash("sha256").update(password).digest("base64url").slice(0, 22)
+}
+
+/**
+ * Constant-time password comparison.
+ * Hashes both inputs with SHA-256 to normalise length before using
+ * timingSafeEqual, preventing both length-based and char-by-char timing leaks.
+ */
+function checkPassword(provided: string, expected: string): boolean {
+  const hash = (s: string) => createHash("sha256").update(s).digest()
+  return timingSafeEqual(hash(provided), hash(expected))
 }
 
 function getCookie(

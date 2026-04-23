@@ -11,28 +11,21 @@ services:
     # Uncomment the line below to expose the server port for local debugging:
     # ports:
     #   - "8080:8080"
+    # env_file passes values from .env literally into the container — no $ interpolation.
+    # This means APP_PASSWORD, SESSION_SECRET, tokens, etc. can contain any special
+    # characters without escaping. Values in environment: below take precedence.
+    env_file:
+      - path: .env
+        required: false
     environment:
       PORT: 8080
       NODE_ENV: production
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
-      SESSION_SECRET: ${SESSION_SECRET}
-      # Must match the public URL users reach the app at (nginx origin).
-      # Used for CORS and post-login redirect.
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5174}
-      CACHE_MAX_SIZE_MB: ${CACHE_MAX_SIZE_MB:-128}
-      # Limit which repositories are visible (optional)
-      GITHUB_ORG: ${GITHUB_ORG:-}
-      GITHUB_REPOS: ${GITHUB_REPOS:-}
-      GITHUB_SCOPE: ${GITHUB_SCOPE:-}
       # Trust X-Forwarded-For from nginx for accurate rate-limit key resolution
       TRUST_PROXY: "true"
-      # Set to "true" only when serving over HTTPS (controls Secure cookie flag)
+      # Defaults for optional vars — overridden by .env values via env_file above
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5174}
+      CACHE_MAX_SIZE_MB: ${CACHE_MAX_SIZE_MB:-128}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      # Corporate HTTP proxy (optional — picked up automatically by EnvHttpProxyAgent)
-      HTTPS_PROXY: ${HTTPS_PROXY:-}
-      HTTP_PROXY: ${HTTP_PROXY:-}
-      NO_PROXY: ${NO_PROXY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     healthcheck:
       # Uses Node's built-in fetch — no curl dependency in the minimal runtime image.

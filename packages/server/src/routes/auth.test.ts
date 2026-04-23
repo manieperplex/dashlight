@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
+import { rateLimiter } from "../middleware/rate-limit.js";
 
 // ── Module mocks (hoisted) ────────────────────────────────────────────────────
 
@@ -56,6 +57,15 @@ vi.mock("../middleware/auth.js", () => ({
   ),
 }));
 
+vi.mock("../lib/pat.js", () => ({
+  getPATIdentity: vi.fn().mockReturnValue({
+    login: "pat-user",
+    name: "PAT User",
+    avatarUrl: "https://example.com/avatar.png",
+    userId: "99",
+  }),
+}));
+
 // Dynamic imports after mocks are hoisted
 import { request as undiciRequest } from "undici";
 import { signSession, verifySession } from "../lib/jwt.js";
@@ -75,6 +85,16 @@ function makeApp() {
   const app = new Hono();
   app.route("/auth", authRouter);
   return app;
+}
+
+// App with the pat-login rate-limiter. Pass a custom limit to test PAT_LOGIN_MAX_ATTEMPTS.
+// Each call creates a fresh limiter instance (clean counter).
+function makeAppWithPatLimiter(limit = 10) {
+  const lim = rateLimiter({ windowMs: 15 * 60_000, limit, keyGenerator: () => "test-ip" })
+  const app = new Hono()
+  app.use("/auth/pat-login", lim)
+  app.route("/auth", authRouter)
+  return app
 }
 
 // Default successful undici response for the GitHub token exchange
@@ -391,6 +411,121 @@ describe("POST /auth/logout", () => {
   });
 });
 
+// ── /auth/config ──────────────────────────────────────────────────────────────
+
+describe("GET /auth/config", () => {
+  beforeEach(() => {
+    delete process.env["GITHUB_TOKEN"];
+    delete process.env["APP_PASSWORD"];
+  });
+
+  afterEach(() => {
+    delete process.env["GITHUB_TOKEN"];
+    delete process.env["APP_PASSWORD"];
+  });
+
+  it("returns mode=oauth when GITHUB_TOKEN is not set", async () => {
+    const res = await makeApp().request("/auth/config");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { mode: string; passwordRequired: boolean };
+    expect(body.mode).toBe("oauth");
+    expect(body.passwordRequired).toBe(false);
+  });
+
+  it("returns mode=pat and passwordRequired=false when only GITHUB_TOKEN is set", async () => {
+    process.env["GITHUB_TOKEN"] = "ghp_test";
+    const res = await makeApp().request("/auth/config");
+    const body = (await res.json()) as { mode: string; passwordRequired: boolean };
+    expect(body.mode).toBe("pat");
+    expect(body.passwordRequired).toBe(false);
+  });
+
+  it("returns mode=pat and passwordRequired=true when both GITHUB_TOKEN and APP_PASSWORD are set", async () => {
+    process.env["GITHUB_TOKEN"] = "ghp_test";
+    process.env["APP_PASSWORD"] = "secret";
+    const res = await makeApp().request("/auth/config");
+    const body = (await res.json()) as { mode: string; passwordRequired: boolean };
+    expect(body.mode).toBe("pat");
+    expect(body.passwordRequired).toBe(true);
+  });
+});
+
+// ── /auth/pat-login ───────────────────────────────────────────────────────────
+
+describe("POST /auth/pat-login", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env["GITHUB_TOKEN"] = "ghp_test_token";
+    process.env["APP_PASSWORD"] = "correctpassword";
+  });
+
+  afterEach(() => {
+    delete process.env["GITHUB_TOKEN"];
+    delete process.env["APP_PASSWORD"];
+  });
+
+  async function postLogin(password: string) {
+    return makeApp().request("/auth/pat-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  it("returns 400 when not in PAT+password mode (no GITHUB_TOKEN)", async () => {
+    delete process.env["GITHUB_TOKEN"];
+    const res = await postLogin("anything");
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when GITHUB_TOKEN is set but APP_PASSWORD is not", async () => {
+    delete process.env["APP_PASSWORD"];
+    const res = await postLogin("anything");
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 on wrong password", async () => {
+    vi.useFakeTimers()
+    try {
+      const promise = postLogin("wrongpassword")
+      await vi.runAllTimersAsync()
+      const res = await promise
+      expect(res.status).toBe(401)
+      const body = (await res.json()) as { error: string }
+      expect(body.error).toMatch(/invalid password/i)
+    } finally {
+      vi.useRealTimers()
+    }
+  });
+
+  it("returns 200 and sets session cookie on correct password", async () => {
+    const res = await postLogin("correctpassword");
+    expect(res.status).toBe(200);
+    const cookies = res.headers.getSetCookie();
+    const sessionCookie = cookies.find((c) => c.startsWith("session="));
+    expect(sessionCookie).toBeDefined();
+    expect(sessionCookie).toContain("HttpOnly");
+    expect(sessionCookie).toContain("SameSite=Strict");
+  });
+
+  it("signs JWT with PAT identity, not OAuth user", async () => {
+    const mockSign = vi.mocked(signSession);
+    await postLogin("correctpassword");
+    expect(mockSign).toHaveBeenCalledWith(
+      expect.objectContaining({ login: "pat-user", sessionId: "pat", pwh: expect.any(String) }),
+    );
+  });
+
+  it("returns 400 on non-JSON body", async () => {
+    const res = await makeApp().request("/auth/pat-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not json",
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 // ── getCookie helper ──────────────────────────────────────────────────────────
 
 describe("getCookie", () => {
@@ -414,3 +549,115 @@ describe("getCookie", () => {
     expect(getCookie("  foo=bar  ;  baz=qux  ", "baz")).toBe("qux");
   });
 });
+
+// ── /auth/pat-login — brute-force protection ──────────────────────────────────
+
+describe("POST /auth/pat-login — artificial delay on wrong password", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env["GITHUB_TOKEN"] = "ghp_test_token"
+    process.env["APP_PASSWORD"] = "correctpassword"
+  })
+
+  afterEach(() => {
+    delete process.env["GITHUB_TOKEN"]
+    delete process.env["APP_PASSWORD"]
+    vi.useRealTimers()
+  })
+
+  const postLogin = (password: string) =>
+    makeApp().request("/auth/pat-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    })
+
+  it("applies a ~500ms delay before returning 401 on wrong password", async () => {
+    vi.useFakeTimers()
+    const promise = postLogin("wrongpassword")
+    // Handler is suspended at setTimeout(resolve, 500) — resolve it now
+    await vi.runAllTimersAsync()
+    const res = await promise
+    expect(res.status).toBe(401)
+  })
+
+  it("does not apply the delay when the password is correct", async () => {
+    // Spy before the request — verify setTimeout(fn, 500) is never called
+    const spy = vi.spyOn(global, "setTimeout")
+    const res = await postLogin("correctpassword")
+    expect(res.status).toBe(200)
+    const delayArgs = spy.mock.calls.map(([, ms]) => ms)
+    expect(delayArgs).not.toContain(500)
+    spy.mockRestore()
+  })
+})
+
+describe("POST /auth/pat-login — rate limiting (10 req / 15 min)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env["GITHUB_TOKEN"] = "ghp_test_token"
+    process.env["APP_PASSWORD"] = "correctpassword"
+  })
+
+  afterEach(() => {
+    delete process.env["GITHUB_TOKEN"]
+    delete process.env["APP_PASSWORD"]
+  })
+
+  it("returns 429 after 10 attempts within the window", async () => {
+    const app = makeAppWithPatLimiter()
+    const post = () =>
+      app.request("/auth/pat-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "correctpassword" }),
+      })
+
+    // First 10 attempts are allowed (correct password → 200, no delay)
+    for (let i = 0; i < 10; i++) {
+      const res = await post()
+      expect(res.status).toBe(200)
+    }
+
+    // 11th attempt hits the rate limiter before the handler runs
+    const res = await post()
+    expect(res.status).toBe(429)
+  })
+
+  it("respects a custom limit (simulates PAT_LOGIN_MAX_ATTEMPTS=3)", async () => {
+    const app = makeAppWithPatLimiter(3)
+    const post = () =>
+      app.request("/auth/pat-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "correctpassword" }),
+      })
+
+    // 3 attempts allowed
+    for (let i = 0; i < 3; i++) {
+      expect((await post()).status).toBe(200)
+    }
+    // 4th is locked
+    expect((await post()).status).toBe(429)
+  })
+
+  it("rate limit is per-IP — a different key gets its own fresh window", async () => {
+    // Two separate app instances = two separate counters (simulating different IPs)
+    const app1 = makeAppWithPatLimiter()
+    const app2 = makeAppWithPatLimiter()
+
+    const post = (app: ReturnType<typeof makeAppWithPatLimiter>) =>
+      app.request("/auth/pat-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "correctpassword" }),
+      })
+
+    // Exhaust app1's limit
+    for (let i = 0; i < 10; i++) await post(app1)
+    expect((await post(app1)).status).toBe(429)
+
+    // app2 has its own counter — still allowed
+    expect((await post(app2)).status).toBe(200)
+  })
+})

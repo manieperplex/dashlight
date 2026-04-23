@@ -28,6 +28,11 @@ export interface SessionUser {
   avatarUrl: string
 }
 
+export interface AuthConfig {
+  mode: "oauth" | "pat"
+  passwordRequired: boolean
+}
+
 // ── GitHub domain types ───────────────────────────────────────────────────────
 
 export interface GitHubUser {
