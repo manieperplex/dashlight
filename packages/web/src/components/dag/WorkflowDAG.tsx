@@ -1,5 +1,7 @@
 import { Fragment } from "react"
 import { runStatusVariant, formatDuration } from "../../lib/utils.js"
+import { buildDagLayout } from "../../lib/dag-layout.js"
+import type { DagLayout } from "../../lib/dag-layout.js"
 import type { WorkflowJob } from "../../types/index.js"
 
 interface WorkflowDAGProps {
@@ -49,6 +51,8 @@ function JobPill({ job }: { job: WorkflowJob }) {
         fontWeight: 500,
         minWidth: 0,
         whiteSpace: "nowrap",
+        height: "100%",
+        boxSizing: "border-box",
       }}
     >
       <span
@@ -73,17 +77,92 @@ function JobPill({ job }: { job: WorkflowJob }) {
   )
 }
 
-// ── DAG ───────────────────────────────────────────────────────────────────────
+// ── Parallel layout constants ─────────────────────────────────────────────────
 
-export function WorkflowDAG({ jobs }: WorkflowDAGProps) {
-  if (jobs.length === 0) {
-    return <p className="empty-state">No jobs to display.</p>
-  }
+const NODE_W = 180
+const NODE_H = 36
+const COL_GAP = 56
+const ROW_GAP = 12
+const PAD = 8
 
+function nodeX(level: number) { return PAD + level * (NODE_W + COL_GAP) }
+function nodeY(row: number)   { return PAD + row   * (NODE_H + ROW_GAP) }
+
+// ── Parallel DAG ──────────────────────────────────────────────────────────────
+
+function ParallelDAG({ layout }: { layout: DagLayout }) {
+  const { nodes, edges, levelCount, maxRows } = layout
+
+  const svgW = PAD * 2 + levelCount * NODE_W + (levelCount - 1) * COL_GAP
+  const svgH = PAD * 2 + maxRows   * NODE_H + (maxRows - 1)   * ROW_GAP
+
+  const nodeMap = new Map(nodes.map(n => [n.job.id, n]))
+
+  return (
+    <div data-testid="dag-parallel" style={{ overflowX: "auto" }}>
+      <div style={{ position: "relative", width: svgW, height: svgH }}>
+        {/* SVG bezier edges */}
+        <svg
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: svgW,
+            height: svgH,
+            overflow: "visible",
+            pointerEvents: "none",
+          }}
+        >
+          {edges.map(({ fromId, toId }) => {
+            const from = nodeMap.get(fromId)
+            const to   = nodeMap.get(toId)
+            if (!from || !to) return null
+
+            const x1 = nodeX(from.level) + NODE_W
+            const y1 = nodeY(from.row)   + NODE_H / 2
+            const x2 = nodeX(to.level)
+            const y2 = nodeY(to.row)     + NODE_H / 2
+            const cx = (x1 + x2) / 2
+
+            return (
+              <path
+                key={`${fromId}-${toId}`}
+                d={`M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`}
+                fill="none"
+                stroke="var(--color-border)"
+                strokeWidth={1.5}
+              />
+            )
+          })}
+        </svg>
+
+        {/* Absolutely-positioned job pills */}
+        {nodes.map(({ job, level, row }) => (
+          <div
+            key={job.id}
+            style={{
+              position: "absolute",
+              left: nodeX(level),
+              top:  nodeY(row),
+              width:  NODE_W,
+              height: NODE_H,
+            }}
+          >
+            <JobPill job={job} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Linear DAG (fallback) ─────────────────────────────────────────────────────
+
+function LinearDAG({ jobs }: { jobs: WorkflowJob[] }) {
   const sorted = sortJobs(jobs)
 
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div data-testid="dag-linear" style={{ overflowX: "auto" }}>
       <div
         style={{
           display: "flex",
@@ -113,4 +192,20 @@ export function WorkflowDAG({ jobs }: WorkflowDAGProps) {
       </div>
     </div>
   )
+}
+
+// ── DAG ───────────────────────────────────────────────────────────────────────
+
+export function WorkflowDAG({ jobs }: WorkflowDAGProps) {
+  if (jobs.length === 0) {
+    return <p className="empty-state">No jobs to display.</p>
+  }
+
+  const layout = buildDagLayout(jobs)
+
+  if (layout) {
+    return <ParallelDAG layout={layout} />
+  }
+
+  return <LinearDAG jobs={jobs} />
 }
