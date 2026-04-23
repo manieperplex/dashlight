@@ -1,6 +1,6 @@
 # Dashlight
 
-A self-hosted CI/CD visibility dashboard for GitHub Actions. One screen showing workflow runs, job status, and repository health across all your repos — without jumping between GitHub pages. Filter runs by branch or status, drill into individual job logs, and track a health score per repository based on recent run outcomes. Works across personal repos and organisation repos from a single login.
+A self-hosted GitHub Actions dashboard. See workflow runs, job status, and per-repository health scores across personal and organisation repos in one view. Filter by branch or status, drill into job logs, and track run trends over time. Sign in with your own GitHub account (OAuth) or share a single Personal Access Token across your team (PAT mode, optionally password-protected).
 
 **No database. Two Docker containers. Your GitHub token never touches the browser.**
 
@@ -10,7 +10,8 @@ A self-hosted CI/CD visibility dashboard for GitHub Actions. One screen showing 
 
 ## How it works
 
-- You sign in with GitHub OAuth. The server exchanges the code for a token and keeps it in memory — only an opaque session cookie reaches your browser.
+- **OAuth mode** (default): each user signs in with their own GitHub account. The server exchanges the code for a per-user token and keeps it in memory — only an opaque session cookie reaches the browser.
+- **PAT mode** (alternative): a single shared GitHub Personal Access Token is set as `GITHUB_TOKEN`. No OAuth app is needed. All users access the dashboard through the same token, optionally protected by an app-level password (`APP_PASSWORD`).
 - All GitHub API calls go through the server proxy, which caches responses in an LRU store (2 min for runs, 7 days for immutable data).
 - The React frontend caches query results in IndexedDB so data survives page reloads.
 - Polling replaces WebSockets: active pipelines refresh every 30 s, summaries every 60 s.
@@ -20,13 +21,88 @@ A self-hosted CI/CD visibility dashboard for GitHub Actions. One screen showing 
 ## Requirements
 
 - Docker + Docker Compose
-- A GitHub OAuth App ([create one here](https://github.com/settings/developers))
-  - Set the **Authorization callback URL** to `http://your-host:5174/auth/callback`
-  - (Port `5174` is the nginx container — the server is not publicly exposed)
+- A GitHub account with access to the repositories you want to monitor
+- Either: a GitHub OAuth App **or** a classic Personal Access Token (PAT)
 
 ---
 
 ## Setup
+
+Choose the authentication mode that fits your deployment. **PAT mode** is simpler — no OAuth app registration needed. **OAuth mode** gives each user their own GitHub identity and a separate API rate limit budget.
+
+### Option A — PAT mode (simpler, shared token)
+
+A single classic PAT (`ghp_…`) is used for all GitHub API calls. No GitHub OAuth App is required.
+
+**1. Create a classic PAT**
+
+Go to [github.com/settings/tokens](https://github.com/settings/tokens) → Generate new token (classic).
+
+Select scopes based on what you need to monitor:
+
+| Your setup | Minimum scopes |
+|---|---|
+| Personal private repos | `repo` |
+| Personal public repos — read only, no re-run/cancel | `public_repo` |
+| Personal public repos — including re-run/cancel | `repo` |
+| Organisation repos (via `GITHUB_ORG` or `GITHUB_REPOS`) | `repo` |
+| Organisation repos on orgs with restricted internal visibility | `repo`, `read:org` |
+
+**Scope reference**
+
+| Scope | What it covers in Dashlight |
+|---|---|
+| `repo` | Read and list private + public repos; read workflow runs; re-run and cancel jobs; read your own basic profile (`login`, `name`, `avatar`) via `GET /user`. **This is the recommended default.** |
+| `public_repo` | Same as above but for public repos only. Re-run and cancel are not available with this scope alone — GitHub requires `repo` for write operations even on public repos. |
+| `read:org` | List repos via `/orgs/:org/repos` when the organisation has set internal repo visibility to "private members only". For standard organisations with member access, `repo` alone is sufficient. |
+
+> **Note on `repo` granting write access:** `repo` is GitHub's all-or-nothing scope for private repositories — read and write are bundled. There is no narrower scope that covers private repo access. The write operations Dashlight performs are: triggering workflow reruns and cancelling in-progress runs, both only when initiated by the user through the UI. No code, settings, or repository content is ever modified.
+
+Copy the generated token (`ghp_…`).
+
+**2. Clone and configure**
+
+```bash
+git clone <repo-url> dashlight
+cd dashlight
+cp env.example .env
+```
+
+Edit `.env` with the token. `SESSION_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET` are not required in PAT+open mode:
+
+```env
+GITHUB_TOKEN=ghp_your_classic_pat_here
+```
+
+To require a password before users can access the dashboard (optional):
+
+```env
+GITHUB_TOKEN=ghp_your_classic_pat_here
+APP_PASSWORD=a-strong-shared-password
+SESSION_SECRET=a-random-string-of-at-least-32-characters
+```
+
+Generate a session secret when using `APP_PASSWORD`:
+
+```bash
+openssl rand -base64 32
+```
+
+> **Rate limits in PAT mode:** GitHub's API limit is 5 000 requests/hour per token. In PAT mode all users share this one pool. Dashlight caches aggressively (2 min for run lists, longer for immutable data), so in practice a team of up to ~20 concurrent users is comfortable. For larger teams or high-frequency polling, consider OAuth mode instead, where each user gets their own 5 000 req/hr budget.
+
+**3. Build and start**
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:5174`. No sign-in required if `APP_PASSWORD` is not set; a password prompt appears if it is.
+
+---
+
+### Option B — OAuth mode (per-user accounts)
+
+Each user signs in with their own GitHub account. The server exchanges the OAuth code for a per-user token — no token is ever shared.
 
 **1. Create a GitHub OAuth App**
 
@@ -126,14 +202,23 @@ docker compose up --build -d
 
 All variables are set in `.env` (copy from `env.example`).
 
+### Authentication
+
 | Variable | Default | Description |
 |---|---|---|
-| `GITHUB_CLIENT_ID` | — | **Required.** OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | — | **Required.** OAuth App client secret |
-| `SESSION_SECRET` | — | **Required.** Min 32 chars, random |
+| `GITHUB_TOKEN` | — | **PAT mode.** Classic PAT (`ghp_…`). Required scope: `repo`. Add `read:org` when `GITHUB_ORG` is set. When set, OAuth vars (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`) are ignored. |
+| `APP_PASSWORD` | — | **PAT mode, optional.** Shared password shown at the login page. When not set the dashboard is open to anyone who can reach the server. Requires `SESSION_SECRET`. |
+| `GITHUB_CLIENT_ID` | — | **OAuth mode.** OAuth App client ID. Required when `GITHUB_TOKEN` is not set. |
+| `GITHUB_CLIENT_SECRET` | — | **OAuth mode.** OAuth App client secret. Required when `GITHUB_TOKEN` is not set. |
+| `SESSION_SECRET` | — | JWT signing secret, minimum 32 characters, random. Required in OAuth mode and in PAT+password mode. |
+
+### General
+
+| Variable | Default | Description |
+|---|---|---|
 | `GITHUB_ORG` | — | Show only repos in this org |
 | `GITHUB_REPOS` | — | Show only these repos (comma-separated `owner/repo`). Takes precedence over `GITHUB_ORG` |
-| `GITHUB_SCOPE` | — | OAuth scopes to request (leave blank for the built-in default) |
+| `GITHUB_SCOPE` | — | OAuth scopes to request (leave blank for the built-in default). Ignored in PAT mode. |
 | `WEB_PORT` | `5174` | Host port for the nginx container |
 | `FRONTEND_URL` | `http://localhost:5174` | Public URL of the app — must match where users open it |
 | `PORT` | `8080` | Internal server listen port (not exposed publicly) |
@@ -147,30 +232,30 @@ All variables are set in `.env` (copy from `env.example`).
 
 ### GitHub OAuth scopes
 
-When you sign in, Dashlight requests these OAuth scopes:
+When a user signs in, Dashlight requests these OAuth scopes:
 
 | Scope | Why it is needed |
 |---|---|
-| `repo` | Read private repositories and manage workflow runs (re-run, cancel). GitHub offers no narrower scope that covers private repo access — `repo` is the minimum required. |
-| `read:org` | Read organisation membership, required when `GITHUB_ORG` is set or when listing org repos. |
-| `read:user` | Read basic profile data (name, avatar) shown in the UI. |
+| `repo` | Read private + public repos; read and manage workflow runs (re-run, cancel). Covers both personal and org repos the user has access to. `repo` is GitHub's minimum scope for any private repo access — there is no narrower read-only alternative. |
+| `read:org` | List org repos via `GITHUB_ORG` and read org membership. Also needed when listing repos in an org with restricted internal visibility. |
+| `read:user` | Read the signed-in user's basic profile (name, avatar) shown in the UI. |
 | `user:email` | Read the account email address. |
 
-**Why `repo` grants write access**
+The only write operations Dashlight performs are triggering workflow reruns and cancelling in-progress runs — both only when the user explicitly initiates them through the UI. No code, settings, or repository content is ever modified.
 
-The `repo` scope is GitHub's all-or-nothing scope for private repositories — it includes both read and write. There is no GitHub scope that grants only read access to private repos. The write capability is a consequence of how GitHub's scope model works, not a Dashlight design choice.
+**Public-only installation (no private repos)**
 
-The only write operations Dashlight performs are triggering workflow reruns and cancelling in-progress runs — both initiated explicitly by the user through the UI. No code, settings, or repository data is ever modified.
-
-If you only use public repositories, you can override the default scope to remove `repo`:
+If you only monitor public repositories, you can replace `repo` with the narrower `public_repo`:
 
 ```env
 GITHUB_SCOPE=read:user,user:email,read:org,public_repo
 ```
 
+Note: re-run and cancel still require `repo` — GitHub does not allow write operations with `public_repo` alone.
+
 **Organisation repos and SAML SSO**
 
-`GITHUB_REPOS=myorg/repo1,myorg/repo2` works for organisation repos without any extra scopes — the `repo` scope covers both personal and organisation private repos the user has access to. `GITHUB_ORG=myorg` works the same way.
+`GITHUB_REPOS=myorg/repo1,myorg/repo2` works for organisation repos without `read:org` — the `repo` scope covers personal and org repos the user has access to. `GITHUB_ORG=myorg` works the same way for standard orgs.
 
 If the organisation enforces SAML SSO, the user must additionally click **Authorize** next to the org name on GitHub's OAuth authorization screen. Without this, GitHub returns 403 for all org resources regardless of granted scopes. There is no server-side workaround — it must be done by each user at login time.
 
@@ -308,8 +393,11 @@ If serving over HTTPS, ensure `COOKIE_SECURE=true`. If the browser blocks the co
 **No repositories shown**
 Check `GITHUB_REPOS` and `GITHUB_ORG` in `.env`. If both are unset, all repos the signed-in user can access are shown — verify the OAuth token has the `repo` scope. Organisation repos also require the user to have authorised the OAuth App for that org (SAML SSO orgs need an extra "Authorize" step on GitHub's OAuth screen).
 
+**PAT mode: server exits immediately on startup**
+The server validates the PAT against the GitHub API before accepting connections. If `GITHUB_TOKEN` is invalid, expired, or missing the `repo` scope, the server logs the error and exits. Run `docker compose logs server` to see the reason.
+
 **`docker compose up` appears to hang**
-The `web` container waits for the `server` container to pass its health check before starting. If the server exits immediately (missing required env var, bad `SESSION_SECRET`), run `docker compose logs server` to see the startup error.
+The `web` container waits for the `server` container to pass its health check before starting. If the server exits immediately (missing required env var, bad `SESSION_SECRET`, or invalid PAT), run `docker compose logs server` to see the startup error.
 
 **GitHub API calls fail in a corporate network**
 Set `HTTPS_PROXY` (and optionally `HTTP_PROXY`, `NO_PROXY`) in `.env`. These are passed to the server at runtime for all outbound calls to `api.github.com`. If the corporate proxy uses a private CA, inject it at build time via `EXTRA_CA_CERTS_B64` (see [Corporate CA certificate](#corporate-ca-certificate)).
@@ -322,7 +410,7 @@ Set `HTTPS_PROXY` (and optionally `HTTP_PROXY`, `NO_PROXY`) in `.env`. These are
 pnpm install
 ```
 
-Copy `env.example` to `.env` and fill in the three required values (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `SESSION_SECRET`). The dev server reads `.env` at startup.
+Copy `env.example` to `.env` and configure your chosen authentication mode. For OAuth, fill in `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `SESSION_SECRET`. For PAT mode, set `GITHUB_TOKEN` (and optionally `APP_PASSWORD` + `SESSION_SECRET`). The dev server reads `.env` at startup.
 
 ```bash
 # Run both packages in watch mode

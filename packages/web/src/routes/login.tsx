@@ -1,6 +1,8 @@
-import { createFileRoute, redirect, isRedirect } from "@tanstack/react-router"
-import { getMe } from "../api/index.js"
+import { useState } from "react"
+import { createFileRoute, redirect, isRedirect, useNavigate, useLoaderData } from "@tanstack/react-router"
+import { getMe, getAuthConfig, patLogin } from "../api/index.js"
 import { DashlightLogo } from "../components/ui/DashlightLogo.js"
+import type { AuthConfig } from "../types/index.js"
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
@@ -13,10 +15,30 @@ export const Route = createFileRoute("/login")({
       if (isRedirect(err)) throw err
     }
   },
+  loader: async (): Promise<AuthConfig> => {
+    try {
+      return await getAuthConfig()
+    } catch {
+      // Server unreachable — fall back to OAuth form, which also won't work
+      // but avoids crashing the router and shows the user a sensible page.
+      return { mode: "oauth", passwordRequired: false }
+    }
+  },
   component: LoginPage,
 })
 
 function LoginPage() {
+  const authConfig = useLoaderData({ from: "/login" }) as AuthConfig
+
+  if (authConfig.mode === "pat" && authConfig.passwordRequired) {
+    return <PATPasswordForm />
+  }
+
+  // OAuth mode (PAT+no-password never renders login since getMe() always succeeds)
+  return <OAuthLoginPage />
+}
+
+function OAuthLoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
@@ -30,7 +52,68 @@ function LoginPage() {
           </svg>
           Sign in with GitHub
         </a>
+      </div>
+    </div>
+  )
+}
 
+function PATPasswordForm() {
+  const navigate = useNavigate()
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    try {
+      await patLogin(password)
+      void navigate({ to: "/" })
+    } catch {
+      setError("Invalid password. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-logo">
+          <DashlightLogo size={40} />
+          <span className="login-logo-name">Dashlight</span>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+            required
+            style={{
+              padding: "0.5rem 0.75rem",
+              fontSize: 14,
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius)",
+              background: "var(--color-bg)",
+              color: "var(--color-text)",
+            }}
+          />
+          {error && (
+            <p role="alert" style={{ color: "var(--color-danger, #e53e3e)", fontSize: 13, margin: 0 }}>
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            className="btn btn-primary btn-login"
+            disabled={loading || !password}
+          >
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
       </div>
     </div>
   )

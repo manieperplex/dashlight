@@ -9,6 +9,7 @@ export interface SessionPayload {
   avatarUrl: string
   iat: number
   exp: number
+  pwh?: string      // Password fingerprint — PAT+password sessions only; absent in OAuth/open sessions
 }
 
 function getSecret(): Uint8Array {

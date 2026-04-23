@@ -4,14 +4,18 @@ import React from "react"
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
+const { mockUseQuery } = vi.hoisted(() => ({ mockUseQuery: vi.fn() }))
+
 vi.mock("@tanstack/react-query", () => ({
   useIsFetching: vi.fn(() => 0),
   useQueryClient: vi.fn(() => ({ invalidateQueries: vi.fn() })),
+  useQuery: mockUseQuery,
 }))
 
 vi.mock("../../api/index.js", () => ({
   logout: vi.fn(),
   clearServerCache: vi.fn().mockResolvedValue(undefined),
+  getAuthConfig: vi.fn(),
 }))
 
 vi.mock("../../context/ThemeContext.js", () => ({
@@ -31,16 +35,22 @@ vi.mock("../ui/Spinner.js", () => ({
 
 import { useTheme } from "../../context/ThemeContext.js"
 import { Header } from "./Header.js"
-import type { SessionUser } from "../../types/index.js"
+import type { SessionUser, AuthConfig } from "../../types/index.js"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const mockToggleTheme = vi.fn()
 const user: SessionUser = { login: "jan", avatarUrl: "https://example.com/av.png", name: "Jan" }
 
+function withConfig(config: AuthConfig | undefined) {
+  mockUseQuery.mockReturnValue({ data: config })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(useTheme).mockReturnValue({ theme: "light", toggleTheme: mockToggleTheme })
+  // Default: OAuth mode
+  withConfig({ mode: "oauth", passwordRequired: false })
 })
 
 // ── Sync button ───────────────────────────────────────────────────────────────
@@ -114,8 +124,52 @@ describe("user info", () => {
     expect(screen.getByAltText("jan")).toBeInTheDocument()
   })
 
+  it("shows sign out button in OAuth mode", () => {
+    render(<Header user={user} />)
+    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument()
+  })
+})
+
+// ── PAT mode ──────────────────────────────────────────────────────────────────
+
+describe("PAT mode — open access (no password)", () => {
+  beforeEach(() => withConfig({ mode: "pat", passwordRequired: false }))
+
+  it("shows Token badge", () => {
+    render(<Header user={user} />)
+    expect(screen.getByText("Token")).toBeInTheDocument()
+  })
+
+  it("hides sign out button", () => {
+    render(<Header user={user} />)
+    expect(screen.queryByRole("button", { name: /sign out/i })).toBeNull()
+  })
+})
+
+describe("PAT mode — with password", () => {
+  beforeEach(() => withConfig({ mode: "pat", passwordRequired: true }))
+
+  it("shows Token badge", () => {
+    render(<Header user={user} />)
+    expect(screen.getByText("Token")).toBeInTheDocument()
+  })
+
   it("shows sign out button", () => {
     render(<Header user={user} />)
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument()
+  })
+})
+
+describe("authConfig not yet loaded (undefined)", () => {
+  beforeEach(() => withConfig(undefined))
+
+  it("shows sign out button as safe default", () => {
+    render(<Header user={user} />)
+    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument()
+  })
+
+  it("does not show Token badge", () => {
+    render(<Header user={user} />)
+    expect(screen.queryByText("Token")).toBeNull()
   })
 })
