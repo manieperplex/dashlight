@@ -47,6 +47,7 @@ RUN pnpm install --frozen-lockfile
 
 # Copy source and build
 COPY packages/web/index.html ./packages/web/
+COPY packages/web/public/ ./packages/web/public/
 COPY packages/web/src/ ./packages/web/src/
 COPY packages/web/tsconfig.json packages/web/vite.config.ts ./packages/web/
 RUN pnpm --filter @dashlight/web build
