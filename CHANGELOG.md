@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.0.0-rc.2](https://github.com/manieperplex/dashlight/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2026-04-28)
+
 ## [1.0.0-rc.1] — 2026-04-20
 
 First public release candidate of Dashlight — a lightweight, self-hosted CI/CD dashboard for GitHub Actions.
