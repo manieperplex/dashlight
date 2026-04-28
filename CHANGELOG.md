@@ -1,8 +1,3 @@
-## 1.0.0-rc.1 (2026-04-19)
-
-### Features
-
-* initialize dashlight monorepo with pnpm workspace structure ([ccc3685](https://github.com/manieperplex/dashlight/commit/ccc3685c7d7648f8b3f1338ded28d4c1f6c94633))
 # Changelog
 
 ## [1.0.0-rc.1] — 2026-04-20

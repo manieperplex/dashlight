@@ -42,8 +42,18 @@ export function getLastTag() {
 /**
  * Apply a semver bump type to a version string.
  * Any unrecognised type falls back to `patch`.
+ *
+ * Pre-release versions (e.g. 1.0.0-rc.1) always bump the pre-release counter
+ * (→ 1.0.0-rc.2) regardless of the commit-derived release type. Promoting a
+ * pre-release to a stable version must be done by manually updating
+ * package.json before the release is triggered.
  */
 export function applyBump(version, releaseType) {
+  const preMatch = version.match(/^(\d+\.\d+\.\d+)-(.+?)\.(\d+)$/);
+  if (preMatch) {
+    const [, base, label, num] = preMatch;
+    return `${base}-${label}.${Number(num) + 1}`;
+  }
   const [major, minor, patch] = version.split(".").map(Number);
   if (releaseType === "major") return `${major + 1}.0.0`;
   if (releaseType === "minor") return `${major}.${minor + 1}.0`;

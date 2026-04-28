@@ -4,6 +4,8 @@ import type { WorkflowRun, Workflow } from "../../types/index.js"
 
 // ── Mocks (must precede imports of the module under test) ─────────────────────
 
+const mockUseChildMatches = vi.fn(() => [] as unknown[])
+
 vi.mock("@tanstack/react-router", () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createFileRoute: () => (opts: any) => ({
@@ -11,7 +13,9 @@ vi.mock("@tanstack/react-router", () => ({
     useParams: vi.fn(() => ({ owner: "acme", repo: "api" })),
   }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Link: ({ children, to: _to, params: _p, ...rest }: any) => <a {...rest}>{children}</a>,
+  Link: ({ children, to: _to, params: _p, search: _s, ...rest }: any) => <a {...rest}>{children}</a>,
+  Outlet: () => <div data-testid="outlet" />,
+  useChildMatches: () => mockUseChildMatches(),
 }))
 
 vi.mock("@tanstack/react-query", () => ({
@@ -73,7 +77,11 @@ import { Route, triggersFromRuns, WorkflowsCard, RecentRunsCard } from "./reposi
 // ── Test helpers ───────────────────────────────────────────────────────────────
 
 let _id = 0
-beforeEach(() => { _id = 0; vi.clearAllMocks() })
+beforeEach(() => {
+  _id = 0
+  vi.clearAllMocks()
+  mockUseChildMatches.mockReturnValue([])
+})
 
 function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
@@ -242,6 +250,49 @@ describe("WorkflowsCard", () => {
   })
 })
 
+// ── WorkflowsCard — name links ────────────────────────────────────────────────
+
+describe("WorkflowsCard — workflow name links", () => {
+  it("renders the workflow name as an internal link (Link mock, no github.com href)", () => {
+    const workflow = makeWorkflow({ id: 1, name: "Deploy Production" })
+    mockUseQuery
+      .mockReturnValueOnce({ data: [workflow], isLoading: false } as ReturnType<typeof useQuery>)
+      .mockReturnValueOnce({ data: { runs: [] }, isLoading: false } as ReturnType<typeof useQuery>)
+    const { container } = render(<WorkflowsCard owner="acme" repo="api" />)
+    // Link mock renders <a> without href; the external ↗ has the github.com href
+    const anchors = Array.from(container.querySelectorAll("a"))
+    const nameAnchor = anchors.find((a) => a.textContent?.trim() === "Deploy Production")
+    expect(nameAnchor).toBeTruthy()
+    expect(nameAnchor!.getAttribute("href") ?? "").not.toContain("github.com")
+  })
+
+  it("renders an external ↗ icon linking to the workflow file on GitHub", () => {
+    const workflow = makeWorkflow({
+      id: 1,
+      htmlUrl: "https://github.com/acme/api/actions/workflows/deploy.yml",
+    })
+    mockUseQuery
+      .mockReturnValueOnce({ data: [workflow], isLoading: false } as ReturnType<typeof useQuery>)
+      .mockReturnValueOnce({ data: { runs: [] }, isLoading: false } as ReturnType<typeof useQuery>)
+    render(<WorkflowsCard owner="acme" repo="api" />)
+    const icon = screen.getByTitle("Open workflow on GitHub")
+    expect(icon).toBeInTheDocument()
+    expect(icon).toHaveAttribute("href", "https://github.com/acme/api/actions/workflows/deploy.yml")
+    expect(icon).toHaveAttribute("target", "_blank")
+  })
+
+  it("each workflow row has an independent name link and external icon", () => {
+    const wf1 = makeWorkflow({ id: 1, name: "CI" })
+    const wf2 = makeWorkflow({ id: 2, name: "Deploy" })
+    mockUseQuery
+      .mockReturnValueOnce({ data: [wf1, wf2], isLoading: false } as ReturnType<typeof useQuery>)
+      .mockReturnValueOnce({ data: { runs: [] }, isLoading: false } as ReturnType<typeof useQuery>)
+    render(<WorkflowsCard owner="acme" repo="api" />)
+    const icons = screen.getAllByTitle("Open workflow on GitHub")
+    expect(icons).toHaveLength(2)
+  })
+})
+
 // ── RecentRunsCard ────────────────────────────────────────────────────────────
 
 describe("RecentRunsCard", () => {
@@ -349,5 +400,24 @@ describe("RepositoryDetail page", () => {
       .mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useQuery>)
     render(<RepositoryDetail />)
     expect(screen.getByText("api")).toBeInTheDocument()
+  })
+
+  it("renders Outlet (not repo content) when a child route is active", () => {
+    mockUseChildMatches.mockReturnValue([{ routeId: "/_app/repositories/$owner/$repo/runs" }])
+    mockUseQuery.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useQuery>)
+    render(<RepositoryDetail />)
+    expect(screen.getByTestId("outlet")).toBeInTheDocument()
+    expect(screen.queryByTestId("page-spinner")).not.toBeInTheDocument()
+    expect(screen.queryByText("Repository not found.")).not.toBeInTheDocument()
+  })
+
+  it("renders repo detail content (not Outlet) when no child route is active", () => {
+    mockUseChildMatches.mockReturnValue([])
+    mockUseQuery
+      .mockReturnValueOnce({ data: { id: 1 }, isLoading: false } as ReturnType<typeof useQuery>)
+      .mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useQuery>)
+    const { container } = render(<RepositoryDetail />)
+    expect(screen.queryByTestId("outlet")).not.toBeInTheDocument()
+    expect(container.querySelector(".health-repo-label-owner")).not.toBeNull()
   })
 })

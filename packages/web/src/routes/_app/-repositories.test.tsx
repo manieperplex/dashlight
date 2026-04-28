@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import React from "react"
 import type { Repository } from "../../types/index.js"
 
@@ -150,5 +150,64 @@ describe("Repositories list", () => {
       .mockReturnValue({ data: { runs: [], actionsDisabled: true }, isLoading: false } as never)
     render(<Repositories />)
     expect(screen.getByText("Actions not enabled")).toBeInTheDocument()
+  })
+
+  // ── Alphabetical ordering ───────────────────────────────────────────────────
+
+  it("renders repos in alphabetical order by fullName", () => {
+    const repos = [
+      makeRepo({ id: 1, fullName: "acme/zebra",  name: "zebra" }),
+      makeRepo({ id: 2, fullName: "acme/alpha",  name: "alpha" }),
+      makeRepo({ id: 3, fullName: "acme/middle", name: "middle" }),
+    ]
+    vi.mocked(useQuery)
+      .mockReturnValueOnce({ data: repos, isLoading: false } as never)
+      .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
+    const { container } = render(<Repositories />)
+    const links = container.querySelectorAll("tbody tr td a")
+    const names = Array.from(links).map((a) => a.textContent)
+    expect(names).toEqual(["alpha", "middle", "zebra"])
+  })
+
+  it("sorting is stable regardless of the API response order", () => {
+    const repos = [
+      makeRepo({ id: 3, fullName: "org/charlie", name: "charlie" }),
+      makeRepo({ id: 1, fullName: "org/alpha",   name: "alpha" }),
+      makeRepo({ id: 2, fullName: "org/bravo",   name: "bravo" }),
+    ]
+    vi.mocked(useQuery)
+      .mockReturnValueOnce({ data: repos, isLoading: false } as never)
+      .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
+    const { container } = render(<Repositories />)
+    const links = container.querySelectorAll("tbody tr td a")
+    const names = Array.from(links).map((a) => a.textContent)
+    expect(names).toEqual(["alpha", "bravo", "charlie"])
+  })
+
+  it("alphabetical order is preserved after filter narrows the list", () => {
+    const repos = [
+      makeRepo({ id: 1, fullName: "org/go-utils",  name: "go-utils",  language: "Go" }),
+      makeRepo({ id: 2, fullName: "org/go-server",  name: "go-server",  language: "Go" }),
+      makeRepo({ id: 3, fullName: "org/ts-client",  name: "ts-client",  language: "TypeScript" }),
+    ]
+    // Use mockImplementation so re-renders after fireEvent still get the right data per query
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(useQuery).mockImplementation((options: any) => {
+      if (options.queryKey[0] === "repos") {
+        return { data: repos, isLoading: false } as never
+      }
+      return { data: { runs: [], actionsDisabled: false }, isLoading: false } as never
+    })
+
+    const { container } = render(<Repositories />)
+    // All three visible and sorted before filtering
+    let links = container.querySelectorAll("tbody tr td a")
+    expect(Array.from(links).map((a) => a.textContent)).toEqual(["go-server", "go-utils", "ts-client"])
+
+    // Type "go" — only the two go repos remain, still sorted
+    fireEvent.change(screen.getByPlaceholderText("Search here..."), { target: { value: "go" } })
+
+    links = container.querySelectorAll("tbody tr td a")
+    expect(Array.from(links).map((a) => a.textContent)).toEqual(["go-server", "go-utils"])
   })
 })

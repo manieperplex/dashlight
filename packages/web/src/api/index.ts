@@ -1,6 +1,8 @@
 import { fetchApi, fetchApiText, ApiError } from "./client.js"
 import type {
   SessionUser,
+  AuthConfig,
+  AppConfig,
   Organization,
   Repository,
   Workflow,
@@ -133,8 +135,24 @@ function normalizeJob(j: GHJob): WorkflowJob {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
+export async function getAuthConfig(): Promise<AuthConfig> {
+  return fetchApi<AuthConfig>("/auth/config")
+}
+
+export async function getAppConfig(): Promise<AppConfig> {
+  return fetchApi<AppConfig>("/api/config")
+}
+
 export async function getMe(): Promise<SessionUser> {
   return fetchApi<SessionUser>("/auth/me")
+}
+
+export async function patLogin(password: string): Promise<void> {
+  await fetchApi("/auth/pat-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  })
 }
 
 export async function logout(): Promise<void> {

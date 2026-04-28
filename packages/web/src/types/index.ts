@@ -28,6 +28,11 @@ export interface SessionUser {
   avatarUrl: string
 }
 
+export interface AuthConfig {
+  mode: "oauth" | "pat"
+  passwordRequired: boolean
+}
+
 // ── GitHub domain types ───────────────────────────────────────────────────────
 
 export interface GitHubUser {
@@ -161,4 +166,10 @@ export interface RunSummary {
 export interface ActivePipeline {
   run: WorkflowRun
   repository: string
+}
+
+// ── App config ────────────────────────────────────────────────────────────────
+
+export interface AppConfig {
+  watchWorkflows: string[]
 }

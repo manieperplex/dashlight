@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.local
+.npmrc
 *.local
 
 # Build outputs
@@ -22,3 +23,6 @@ Thumbs.db
 
 # pnpm
 pnpm-debug.log
+
+# Certificate build args — contains base64-encoded PEM data, never commit
+.docker-certs.env

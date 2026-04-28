@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { useIsFetching, useQueryClient } from "@tanstack/react-query"
-import { logout, clearServerCache } from "../../api/index.js"
+import { useIsFetching, useQueryClient, useQuery } from "@tanstack/react-query"
+import { logout, clearServerCache, getAuthConfig } from "../../api/index.js"
 import { Button } from "../ui/Button.js"
 import { Spinner } from "../ui/Spinner.js"
 import { useTheme } from "../../context/ThemeContext.js"
@@ -16,6 +16,18 @@ export function Header({ user, lastUpdated }: HeaderProps) {
   const queryClient = useQueryClient()
   const [syncing, setSyncing] = useState(false)
   const { theme, toggleTheme } = useTheme()
+
+  const { data: authConfig } = useQuery({
+    queryKey: ["auth", "config"],
+    queryFn: getAuthConfig,
+    // 5 min: re-check if auth mode changes (e.g. APP_PASSWORD added).
+    // Not persisted to IndexedDB (auth queries are excluded — see main.tsx).
+    staleTime: 5 * 60 * 1000,
+    // On error (server unreachable) default to OAuth — safe: shows sign-out button
+    retry: false,
+  })
+
+  const isPATOpenAccess = authConfig?.mode === "pat" && !authConfig.passwordRequired
 
   async function handleLogout() {
     await logout()
@@ -63,6 +75,11 @@ export function Header({ user, lastUpdated }: HeaderProps) {
         >
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </button>
+        {authConfig?.mode === "pat" && (
+          <span className="badge badge-neutral text-small" title="Using shared GitHub token">
+            Token
+          </span>
+        )}
         <img
           src={user.avatarUrl}
           alt={user.login}
@@ -73,9 +90,11 @@ export function Header({ user, lastUpdated }: HeaderProps) {
         <span className="text-small" style={{ fontWeight: 500 }}>
           {user.login}
         </span>
-        <Button size="sm" onClick={handleLogout}>
-          Sign out
-        </Button>
+        {!isPATOpenAccess && (
+          <Button size="sm" onClick={handleLogout}>
+            Sign out
+          </Button>
+        )}
       </div>
     </header>
   )

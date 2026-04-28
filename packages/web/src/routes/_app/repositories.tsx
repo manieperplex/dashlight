@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { getRepos, getRuns } from "../../api/index.js"
 import { StatusBadge } from "../../components/ui/Badge.js"
+import { Card, CardHeader } from "../../components/ui/Card.js"
 import { PageSpinner } from "../../components/ui/Spinner.js"
 import { SuccessSquares } from "../../components/ui/SuccessSquares.js"
 import { formatRelativeTime } from "../../lib/utils.js"
@@ -34,7 +35,7 @@ function Repositories() {
   }
 
   const q = filter.toLowerCase()
-  const visibleRepos = q
+  const visibleRepos = (q
     ? repos.filter((r) =>
         r.fullName.toLowerCase().includes(q) ||
         (r.description?.toLowerCase().includes(q) ?? false) ||
@@ -42,45 +43,49 @@ function Repositories() {
         r.topics.some((t) => t.toLowerCase().includes(q))
       )
     : repos
+  ).toSorted((a, b) => a.fullName.localeCompare(b.fullName))
+
+  const title = q
+    ? `Repositories (${visibleRepos.length} of ${repos.length})`
+    : `Repositories (${repos.length})`
 
   return (
     <div>
-      <div style={{ marginBottom: "0.75rem" }}>
-        <input
-          type="search"
-          placeholder="Filter repositories…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "0.3125rem 0.625rem",
-            fontSize: 13,
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius)",
-            background: "var(--color-bg)",
-            color: "var(--color-text)",
-          }}
-        />
-      </div>
-      <div className="card">
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Repository</th>
-                <th>Language</th>
-                <th>Last push</th>
-                <th>Last run</th>
-                <th>Health</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRepos.length === 0 ? (
+      <Card>
+        <CardHeader title={title} />
+        <div style={{ marginBottom: "0.75rem" }}>
+          <input
+            type="search"
+            placeholder="Search here..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.3125rem 0.625rem",
+              fontSize: 13,
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius)",
+              background: "var(--color-bg)",
+              color: "var(--color-text)",
+            }}
+          />
+        </div>
+        {visibleRepos.length === 0 ? (
+          <p className="empty-state">No repositories match "{filter}".</p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={5} className="empty-state">No repositories match "{filter}".</td>
+                  <th>Repository</th>
+                  <th>Language</th>
+                  <th>Last push</th>
+                  <th>Last run</th>
+                  <th>Health</th>
                 </tr>
-              ) : (
-                visibleRepos.map((repo) => {
+              </thead>
+              <tbody>
+                {visibleRepos.map((repo) => {
                   const [owner, name] = repo.fullName.split("/")
                   return (
                     <RepoRow
@@ -90,12 +95,12 @@ function Repositories() {
                       repo={repo}
                     />
                   )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   )
 }

@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_app")({
 })
 
 function AppLayout() {
-  const { user } = Route.useRouteContext()
+  const { user } = Route.useRouteContext() as { user: SessionUser }
   return (
     <Layout user={user}>
       <Outlet />

@@ -10,6 +10,7 @@ import {
   truncate,
   tierLabel,
   tierColor,
+  VARIANT_COLOR,
 } from "./utils.js"
 
 // ── formatDuration ────────────────────────────────────────────────────────────
@@ -154,6 +155,27 @@ describe("runStatusVariant", () => {
 
   it("returns pending for other statuses", () => {
     expect(runStatusVariant("pending", null)).toBe("pending")
+  })
+})
+
+// ── VARIANT_COLOR ─────────────────────────────────────────────────────────────
+
+describe("VARIANT_COLOR", () => {
+  it("has an entry for every StatusVariant", () => {
+    const variants = ["success", "failure", "running", "pending", "cancelled", "neutral"] as const
+    for (const v of variants) {
+      expect(VARIANT_COLOR[v]).toBeTruthy()
+    }
+  })
+
+  it("each value references a CSS custom property", () => {
+    for (const color of Object.values(VARIANT_COLOR)) {
+      expect(color).toMatch(/^var\(--/)
+    }
+  })
+
+  it("success and failure map to distinct colors", () => {
+    expect(VARIANT_COLOR.success).not.toBe(VARIANT_COLOR.failure)
   })
 })
 
