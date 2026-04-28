@@ -14,6 +14,7 @@ import proxyRoutes from "./routes/proxy.js"
 import reposRoutes from "./routes/repos.js"
 import scoreRoutes from "./routes/score.js"
 import systemRoutes from "./routes/system.js"
+import configRoutes from "./routes/config.js"
 import { authMiddleware } from "./middleware/auth.js"
 import { cacheInvalidateUser } from "./lib/cache.js"
 import type { AuthEnv } from "./middleware/auth.js"
@@ -117,6 +118,7 @@ async function bootstrap() {
   app.route("/proxy", proxyRoutes)
   app.route("/api/repos", reposRoutes)
   app.route("/api/score", scoreRoutes)
+  app.route("/api/config", configRoutes)
   app.route("/system", systemRoutes)
 
   // Clear server-side cache for the authenticated user

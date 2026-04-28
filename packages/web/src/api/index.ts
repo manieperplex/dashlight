@@ -2,6 +2,7 @@ import { fetchApi, fetchApiText, ApiError } from "./client.js"
 import type {
   SessionUser,
   AuthConfig,
+  AppConfig,
   Organization,
   Repository,
   Workflow,
@@ -136,6 +137,10 @@ function normalizeJob(j: GHJob): WorkflowJob {
 
 export async function getAuthConfig(): Promise<AuthConfig> {
   return fetchApi<AuthConfig>("/auth/config")
+}
+
+export async function getAppConfig(): Promise<AppConfig> {
+  return fetchApi<AppConfig>("/api/config")
 }
 
 export async function getMe(): Promise<SessionUser> {

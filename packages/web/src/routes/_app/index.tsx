@@ -1,13 +1,14 @@
 import React, { useState } from "react"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useQuery, useQueries } from "@tanstack/react-query"
-import { getRepos, getRuns } from "../../api/index.js"
+import { getRepos, getRuns, getAppConfig } from "../../api/index.js"
 import { PageSpinner } from "../../components/ui/Spinner.js"
 import { Card, CardHeader } from "../../components/ui/Card.js"
 import { RepoActivityChart, BuildTrendChart } from "../../components/charts/RunCharts.js"
 import type { RepoRunEntry } from "../../components/charts/RunCharts.js"
 import { SuccessSquares } from "../../components/ui/SuccessSquares.js"
 import { formatRelativeTime, computeRunSummary, formatDuration } from "../../lib/utils.js"
+import { WorkflowHealthSection } from "../../components/WorkflowHealthSection.js"
 import type { Repository, WorkflowRun } from "../../types/index.js"
 
 export const Route = createFileRoute("/_app/")({
@@ -19,6 +20,12 @@ function Dashboard() {
     queryKey: ["repos", "user"],
     queryFn: () => getRepos(),
     refetchInterval: 60_000,
+  })
+
+  const { data: appConfig } = useQuery({
+    queryKey: ["config"],
+    queryFn: () => getAppConfig(),
+    staleTime: Infinity,
   })
 
   const repoList = (repos ?? []).slice(0, 10)
@@ -44,9 +51,12 @@ function Dashboard() {
     runs: runResults[i]?.data?.runs ?? [],
   }))
 
+  const watchWorkflows = appConfig?.watchWorkflows ?? []
+
   return (
     <div>
       <div className="stack">
+        <WorkflowHealthSection watchWorkflows={watchWorkflows} repoRuns={repoRuns} />
         <HealthTable repoRuns={repoRuns} repos={repoList} />
         <ActivityCard repoRuns={repoRuns} repos={repoList} />
         <BuildTrendsCard repoRuns={repoRuns} repos={repoList} />

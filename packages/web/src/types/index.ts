@@ -167,3 +167,9 @@ export interface ActivePipeline {
   run: WorkflowRun
   repository: string
 }
+
+// ── App config ────────────────────────────────────────────────────────────────
+
+export interface AppConfig {
+  watchWorkflows: string[]
+}
