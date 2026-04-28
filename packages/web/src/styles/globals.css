@@ -294,6 +294,17 @@ tr:hover td { background: var(--color-bg-secondary); }
 .trend-item { min-width: 0; }
 .trend-item-label { font-size: 12px; font-weight: 600; margin-bottom: 0.5rem; }
 
+/* ── Build Activity chart legend ─────────────────────────────────────────── */
+.activity-chart-legend {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 1rem;
+  padding-top: 0.5rem;
+  font-size: 11px; color: var(--color-text-secondary);
+}
+.activity-chart-legend-item {
+  display: flex; align-items: center; gap: 0.35rem;
+  white-space: nowrap;
+}
+
 /* ── Build Activity stats ────────────────────────────────────────────────── */
 .activity-stats {
   display: flex; flex-wrap: wrap; gap: 1.25rem;

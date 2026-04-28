@@ -57,8 +57,8 @@ function Dashboard() {
     <div>
       <div className="stack">
         <WorkflowHealthSection watchWorkflows={watchWorkflows} repoRuns={repoRuns} />
-        <HealthTable repoRuns={repoRuns} repos={repoList} />
         <ActivityCard repoRuns={repoRuns} repos={repoList} />
+        <HealthTable repoRuns={repoRuns} repos={repoList} />
         <BuildTrendsCard repoRuns={repoRuns} repos={repoList} />
       </div>
     </div>

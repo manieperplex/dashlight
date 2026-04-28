@@ -10,7 +10,6 @@ import {
   CartesianGrid,
   LineChart,
   Line,
-  Legend,
 } from "recharts"
 import type { WorkflowRun } from "../../types/index.js"
 
@@ -103,55 +102,62 @@ export function RepoActivityChart({ repoRuns }: { repoRuns: RepoRunEntry[] }) {
   const xInterval = Math.floor(30 / 5)
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={data} margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-        <XAxis
-          dataKey="date"
-          tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
-          tickLine={false}
-          axisLine={false}
-          interval={xInterval}
-        />
-        <YAxis
-          tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
-          tickLine={false}
-          axisLine={false}
-          allowDecimals={false}
-          width={28}
-          tickCount={4}
-        />
-        <Tooltip
-          contentStyle={{
-            fontSize: 12,
-            background: "var(--color-bg)",
-            border: "1px solid var(--color-border)",
-            borderRadius: 6,
-          }}
-          labelStyle={{ color: "var(--color-text)", fontWeight: 600, marginBottom: 4 }}
-          itemStyle={{ color: "var(--color-text-secondary)" }}
-          formatter={(value: unknown, name: unknown) => [value as number, name as string]}
-        />
-        <Legend
-          iconType="circle"
-          iconSize={8}
-          wrapperStyle={{ fontSize: 11, paddingTop: 12, color: "var(--color-text-secondary)" }}
-        />
-        {activeRepos.map(({ name }, i) => (
-          <Line
-            key={name}
-            type="monotone"
-            dataKey={name}
-            stroke={paletteColor(i)}
-            strokeWidth={1.5}
-            strokeDasharray="0 3"
-            strokeLinecap="square"
-            dot={false}
-            activeDot={{ r: 4, strokeWidth: 0 }}
+    <div>
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+            tickLine={false}
+            axisLine={false}
+            interval={xInterval}
           />
+          <YAxis
+            tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+            tickLine={false}
+            axisLine={false}
+            allowDecimals={false}
+            width={28}
+            tickCount={4}
+          />
+          <Tooltip
+            contentStyle={{
+              fontSize: 12,
+              background: "var(--color-bg)",
+              border: "1px solid var(--color-border)",
+              borderRadius: 6,
+            }}
+            labelStyle={{ color: "var(--color-text)", fontWeight: 600, marginBottom: 4 }}
+            itemStyle={{ color: "var(--color-text-secondary)" }}
+            formatter={(value: unknown, name: unknown) => [value as number, name as string]}
+          />
+          {activeRepos.map(({ name }, i) => (
+            <Line
+              key={name}
+              type="monotone"
+              dataKey={name}
+              stroke={paletteColor(i)}
+              strokeWidth={1.5}
+              strokeDasharray="0 3"
+              strokeLinecap="square"
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 0 }}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="activity-chart-legend">
+        {activeRepos.map(({ name }, i) => (
+          <span key={name} className="activity-chart-legend-item">
+            <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+              <circle cx="4" cy="4" r="4" fill={paletteColor(i)} />
+            </svg>
+            {name}
+          </span>
         ))}
-      </LineChart>
-    </ResponsiveContainer>
+      </div>
+    </div>
   )
 }
 
