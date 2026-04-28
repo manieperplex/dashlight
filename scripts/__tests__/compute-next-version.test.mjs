@@ -74,6 +74,36 @@ describe("applyBump", () => {
   it("falls back to patch for an unrecognised release type", () => {
     expect(applyBump("1.2.3", "unknown")).toBe("1.2.4");
   });
+
+  // Pre-release versions — always bump the counter, ignore bump type
+  it("increments rc counter for a patch bump (rc.1 → rc.2)", () => {
+    expect(applyBump("1.0.0-rc.1", "patch")).toBe("1.0.0-rc.2");
+  });
+
+  it("increments rc counter for a minor bump — does not jump to stable", () => {
+    expect(applyBump("1.0.0-rc.1", "minor")).toBe("1.0.0-rc.2");
+  });
+
+  it("increments rc counter for a major bump — does not jump to stable", () => {
+    expect(applyBump("1.0.0-rc.1", "major")).toBe("1.0.0-rc.2");
+  });
+
+  it("handles rc counter larger than 9", () => {
+    expect(applyBump("1.0.0-rc.9", "patch")).toBe("1.0.0-rc.10");
+  });
+
+  it("preserves the base version digits for pre-release", () => {
+    expect(applyBump("2.3.4-rc.1", "minor")).toBe("2.3.4-rc.2");
+  });
+
+  it("works with alpha and beta labels", () => {
+    expect(applyBump("1.0.0-alpha.1", "patch")).toBe("1.0.0-alpha.2");
+    expect(applyBump("1.0.0-beta.3",  "minor")).toBe("1.0.0-beta.4");
+  });
+
+  it("never produces NaN for a pre-release version", () => {
+    expect(applyBump("1.0.0-rc.1", "patch")).not.toContain("NaN");
+  });
 });
 
 // ── computeNextVersion ───────────────────────────────────────────────────────
@@ -116,5 +146,12 @@ describe("computeNextVersion", () => {
     vi.mocked(execSync).mockReturnValue(Buffer.from("v0.1.0\n"));
     mockBump.mockResolvedValue({ releaseType: "major" });
     expect(await computeNextVersion()).toBe("1.0.0");
+  });
+
+  it("increments rc counter when current version is a pre-release (feat commits do not skip to stable)", async () => {
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ version: "1.0.0-rc.1" }));
+    vi.mocked(execSync).mockReturnValue(Buffer.from("v1.0.0-rc.1\n"));
+    mockBump.mockResolvedValue({ releaseType: "minor" });
+    expect(await computeNextVersion()).toBe("1.0.0-rc.2");
   });
 });
