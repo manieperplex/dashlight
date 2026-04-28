@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { Card } from "./ui/Card.js"
 import { TruncatingTitle } from "./ui/TruncatingTitle.js"
-import { formatDuration, formatRelativeTime, runStatusVariant } from "../lib/utils.js"
+import { formatDuration, formatRelativeTime, runStatusVariant, VARIANT_COLOR } from "../lib/utils.js"
 import type { WorkflowRun } from "../types/index.js"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -24,15 +24,6 @@ function pickRun(runs: WorkflowRun[]): WorkflowRun | undefined {
   return runs.find((r) => r.status === "in_progress" || r.status === "queued") ?? runs[0]
 }
 
-const COLOR: Record<string, string> = {
-  success:   "var(--color-success)",
-  failure:   "var(--color-failure)",
-  running:   "var(--color-running)",
-  cancelled: "var(--color-cancelled)",
-  neutral:   "var(--color-neutral)",
-  pending:   "var(--color-neutral)",
-}
-
 // ── Run dot ───────────────────────────────────────────────────────────────────
 
 function RunDot({ status, conclusion }: { status: WorkflowRun["status"]; conclusion: WorkflowRun["conclusion"] }) {
@@ -53,7 +44,7 @@ function HealthRunCard({ run, fullName }: { run: WorkflowRun; fullName: string }
   const commitUrl = `https://github.com/${fullName}/commit/${run.headSha}`
   const duration = formatDuration(run.runStartedAt, isActive ? null : run.updatedAt)
   const variant = runStatusVariant(run.status, run.conclusion)
-  const color = COLOR[variant] ?? "var(--color-border)"
+  const color = VARIANT_COLOR[variant]
 
   return (
     <div

@@ -373,6 +373,11 @@ tr:hover td { background: var(--color-bg-secondary); }
   font-size: 12px; border-bottom: none;
   background: transparent;
 }
+/* Allow the name cell to shrink and truncate rather than expanding the row */
+.health-workflow-row td:first-child { max-width: 0; overflow: hidden; }
+.health-workflow-name-cell { display: flex; align-items: center; overflow: hidden; min-width: 0; }
+/* Prevent date strings like "Nov 21" from wrapping across lines */
+.health-last-run { white-space: nowrap; }
 tr:has(+ .health-repo-label-row) td { padding-bottom: 0.875rem; }
 tr + .health-repo-label-row td { border-top: 1px solid var(--color-border); padding-top: 1.75rem; }
 .health-workflow-row:hover td { background: var(--color-bg-secondary); }

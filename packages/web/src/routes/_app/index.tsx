@@ -7,7 +7,7 @@ import { Card, CardHeader } from "../../components/ui/Card.js"
 import { RepoActivityChart, BuildTrendChart } from "../../components/charts/RunCharts.js"
 import type { RepoRunEntry } from "../../components/charts/RunCharts.js"
 import { SuccessSquares } from "../../components/ui/SuccessSquares.js"
-import { formatRelativeTime, computeRunSummary, formatDuration } from "../../lib/utils.js"
+import { formatRelativeTime, computeRunSummary, formatDuration, runStatusVariant, VARIANT_COLOR } from "../../lib/utils.js"
 import { WorkflowHealthSection } from "../../components/WorkflowHealthSection.js"
 import type { Repository, WorkflowRun } from "../../types/index.js"
 
@@ -105,11 +105,13 @@ export function RepoRunCards({ fullName, runs }: { fullName: string; runs: Workf
         const isActive = run.status === "in_progress" || run.status === "queued"
         const commitUrl = `https://github.com/${fullName}/commit/${run.headSha}`
         const duration = formatDuration(run.runStartedAt, isActive ? null : run.updatedAt)
+        const borderColor = VARIANT_COLOR[runStatusVariant(run.status, run.conclusion)]
         return (
           <div
             key={`${fullName}/${run.workflowId}`}
             className="latest-run-card"
             data-active={isActive || undefined}
+            style={{ borderLeft: `3px solid ${borderColor}` }}
           >
             <div className="flex-center gap-2" style={{ justifyContent: "space-between", minWidth: 0 }}>
               <Link
@@ -411,7 +413,7 @@ export function HealthTable({ repoRuns, repos }: { repoRuns: RepoRunEntry[]; rep
                           </Link>
                         </span>
                       </td>
-                      <td className="text-muted text-small">
+                      <td className="text-muted text-small health-last-run">
                         {lastRun ? (
                           <span className="flex-center gap-2">
                             <RunDot status={lastRun.status} conclusion={lastRun.conclusion} />
@@ -432,20 +434,22 @@ export function HealthTable({ repoRuns, repos }: { repoRuns: RepoRunEntry[]; rep
                       return (
                         <tr key={`${repo.id}-${wf.name}`} className="health-workflow-row">
                           <td>
-                            <span className="health-workflow-indent">↳</span>
-                            {wfLast ? (
-                              <Link
-                                to="/runs/$owner/$repo/$runId"
-                                params={{ owner: owner!, repo: name!, runId: String(wfLast.id) }}
-                                className="text-muted"
-                              >
-                                {wf.name}
-                              </Link>
-                            ) : (
-                              <span className="text-muted">{wf.name}</span>
-                            )}
+                            <span className="health-workflow-name-cell">
+                              <span className="health-workflow-indent">↳</span>
+                              {wfLast ? (
+                                <Link
+                                  to="/runs/$owner/$repo/$runId"
+                                  params={{ owner: owner!, repo: name!, runId: String(wfLast.id) }}
+                                  className="text-muted truncate"
+                                >
+                                  {wf.name}
+                                </Link>
+                              ) : (
+                                <span className="text-muted truncate">{wf.name}</span>
+                              )}
+                            </span>
                           </td>
-                          <td className="text-muted text-small">
+                          <td className="text-muted text-small health-last-run">
                             {wfLast ? (
                               <span className="flex-center gap-2">
                                 <RunDot status={wfLast.status} conclusion={wfLast.conclusion} />
