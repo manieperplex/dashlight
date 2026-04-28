@@ -35,7 +35,7 @@ function Repositories() {
   }
 
   const q = filter.toLowerCase()
-  const visibleRepos = q
+  const visibleRepos = (q
     ? repos.filter((r) =>
         r.fullName.toLowerCase().includes(q) ||
         (r.description?.toLowerCase().includes(q) ?? false) ||
@@ -43,6 +43,7 @@ function Repositories() {
         r.topics.some((t) => t.toLowerCase().includes(q))
       )
     : repos
+  ).toSorted((a, b) => a.fullName.localeCompare(b.fullName))
 
   const title = q
     ? `Repositories (${visibleRepos.length} of ${repos.length})`

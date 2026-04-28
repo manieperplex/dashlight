@@ -45,6 +45,15 @@ export function formatDateTime(dateStr: string | null): string {
 
 export type StatusVariant = "success" | "failure" | "running" | "pending" | "cancelled" | "neutral"
 
+export const VARIANT_COLOR: Record<StatusVariant, string> = {
+  success:   "var(--color-success)",
+  failure:   "var(--color-failure)",
+  running:   "var(--color-running)",
+  cancelled: "var(--color-cancelled)",
+  neutral:   "var(--color-neutral)",
+  pending:   "var(--color-neutral)",
+}
+
 export function runStatusVariant(status: RunStatus, conclusion: RunConclusion): StatusVariant {
   if (status === "in_progress" || status === "queued" || status === "waiting") return "running"
   if (status === "completed") {

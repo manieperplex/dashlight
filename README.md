@@ -1,6 +1,6 @@
 # Dashlight
 
-A self-hosted GitHub Actions dashboard. See workflow runs, job status, and per-repository health scores across personal and organisation repos in one view. Filter by branch or status, drill into job logs, and track run trends over time. Sign in with your own GitHub account (OAuth) or share a single Personal Access Token across your team (PAT mode, optionally password-protected).
+A self-hosted GitHub Actions dashboard. See workflow runs, job status, and per-repository health scores across personal and organisation repos in one view. Pin specific workflows in a **Workflow Health** section for an at-a-glance view of your most important pipelines across all repos. Filter by branch or status, drill into job logs, and track run trends over time. Sign in with your own GitHub account (OAuth) or share a single Personal Access Token across your team (PAT mode, optionally password-protected).
 
 **No database. Two Docker containers. Your GitHub token never touches the browser.**
 
@@ -218,6 +218,7 @@ All variables are set in `.env` (copy from `env.example`).
 |---|---|---|
 | `GITHUB_ORG` | — | Show only repos in this org |
 | `GITHUB_REPOS` | — | Show only these repos (comma-separated `owner/repo`). Takes precedence over `GITHUB_ORG` |
+| `WATCH_WORKFLOWS` | — | Comma-separated workflow names to highlight in the **Workflow Health** section at the top of the dashboard (e.g. `publish,security-scan,deploy`). Matching is case-insensitive. The section is hidden when this variable is not set or no matching runs exist in any repo. |
 | `GITHUB_SCOPE` | — | OAuth scopes to request (leave blank for the built-in default). Ignored in PAT mode. |
 | `WEB_PORT` | `5174` | Host port for the nginx container |
 | `FRONTEND_URL` | `http://localhost:5174` | Public URL of the app — must match where users open it |
@@ -445,6 +446,7 @@ Hono Server (Node 22, internal only)
   ├── /auth/*     — GitHub OAuth flow, session management
   ├── /proxy/*    — Authenticated GitHub API proxy (LRU cache)
   ├── /api/score  — Repository health scoring (7 categories)
+  ├── /api/config — Server-side configuration exposed to the frontend (e.g. WATCH_WORKFLOWS)
   └── /system/*   — Health check
        │
        ▼

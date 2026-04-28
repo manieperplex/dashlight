@@ -45,6 +45,7 @@ import {
   HealthTable,
   BuildTrendsCard,
 } from "./index.js"
+import { VARIANT_COLOR } from "../../lib/utils.js"
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -266,6 +267,48 @@ describe("RepoRunCards", () => {
     const link = screen.getByRole("link", { name: /aabbccd/ })
     expect(link).toHaveAttribute("href", "https://github.com/acme/api/commit/aabbccddee112233")
   })
+
+  // ── Colored left border ─────────────────────────────────────────────────────
+
+  it("success run card has a green left border", () => {
+    const run = makeRun({ status: "completed", conclusion: "success" })
+    const { container } = render(<RepoRunCards fullName="owner/repo" runs={[run]} />)
+    const card = container.querySelector(".latest-run-card") as HTMLElement
+    expect(card.style.borderLeft).toContain(VARIANT_COLOR.success)
+  })
+
+  it("failure run card has a red left border", () => {
+    const run = makeRun({ status: "completed", conclusion: "failure" })
+    const { container } = render(<RepoRunCards fullName="owner/repo" runs={[run]} />)
+    const card = container.querySelector(".latest-run-card") as HTMLElement
+    expect(card.style.borderLeft).toContain(VARIANT_COLOR.failure)
+  })
+
+  it("in_progress run card has a running-color left border", () => {
+    const run = makeRun({ status: "in_progress", conclusion: null })
+    const { container } = render(<RepoRunCards fullName="owner/repo" runs={[run]} />)
+    const card = container.querySelector(".latest-run-card") as HTMLElement
+    expect(card.style.borderLeft).toContain(VARIANT_COLOR.running)
+  })
+
+  it("cancelled run card has a cancelled-color left border", () => {
+    const run = makeRun({ status: "completed", conclusion: "cancelled" })
+    const { container } = render(<RepoRunCards fullName="owner/repo" runs={[run]} />)
+    const card = container.querySelector(".latest-run-card") as HTMLElement
+    expect(card.style.borderLeft).toContain(VARIANT_COLOR.cancelled)
+  })
+
+  it("each card gets its own status-appropriate border color", () => {
+    const runs = [
+      makeRun({ workflowId: 1, status: "completed", conclusion: "success" }),
+      makeRun({ workflowId: 2, status: "completed", conclusion: "failure" }),
+    ]
+    const { container } = render(<RepoRunCards fullName="owner/repo" runs={runs} />)
+    const cards = container.querySelectorAll(".latest-run-card") as NodeListOf<HTMLElement>
+    const borders = Array.from(cards).map((c) => c.style.borderLeft)
+    expect(borders[0]).toContain(VARIANT_COLOR.success)
+    expect(borders[1]).toContain(VARIANT_COLOR.failure)
+  })
 })
 
 // ── ActivityCard ──────────────────────────────────────────────────────────────
@@ -484,6 +527,54 @@ describe("HealthTable", () => {
     const link = within(wfRow).getByRole("link")
     expect(link).not.toHaveAttribute("href", "/repositories/$owner/$repo/runs")
     expect(link).toHaveAttribute("href", "/runs/$owner/$repo/$runId")
+  })
+
+  // ── Truncation and layout ───────────────────────────────────────────────────
+
+  it("wraps workflow name in health-workflow-name-cell for truncation", () => {
+    const repo = makeRepo({ fullName: "owner/repo" })
+    const repoRuns = [{
+      name: "repo", fullName: "owner/repo",
+      runs: [makeRun({ workflowId: 1, workflowName: "npm_and_yarn in /microservices for @xmldom/xmldom - Update #1334106698" })],
+    }]
+    const { container } = render(<HealthTable repoRuns={repoRuns} repos={[repo]} />)
+    const wfRow = container.querySelector(".health-workflow-row")!
+    expect(wfRow.querySelector(".health-workflow-name-cell")).toBeInTheDocument()
+  })
+
+  it("workflow name link inside name-cell has truncate class", () => {
+    const repo = makeRepo({ fullName: "owner/repo" })
+    const repoRuns = [{
+      name: "repo", fullName: "owner/repo",
+      runs: [makeRun({ workflowId: 1, workflowName: "A Very Long Workflow Name That Should Be Truncated" })],
+    }]
+    const { container } = render(<HealthTable repoRuns={repoRuns} repos={[repo]} />)
+    const wfRow = container.querySelector(".health-workflow-row")!
+    const nameCell = wfRow.querySelector(".health-workflow-name-cell")!
+    const link = nameCell.querySelector("a")
+    expect(link?.classList.contains("truncate")).toBe(true)
+  })
+
+  it("workflow last-run cell has health-last-run class for no-wrap", () => {
+    const repo = makeRepo({ fullName: "owner/repo" })
+    const repoRuns = [{
+      name: "repo", fullName: "owner/repo",
+      runs: [makeRun({ workflowId: 1, workflowName: "CI" })],
+    }]
+    const { container } = render(<HealthTable repoRuns={repoRuns} repos={[repo]} />)
+    const wfRow = container.querySelector(".health-workflow-row")!
+    // Second td is the last-run cell
+    const lastRunTd = wfRow.querySelectorAll("td")[1]
+    expect(lastRunTd?.classList.contains("health-last-run")).toBe(true)
+  })
+
+  it("repo-level last-run cell has health-last-run class for no-wrap", () => {
+    const repo = makeRepo({ fullName: "owner/repo" })
+    const repoRuns = [{ name: "repo", fullName: "owner/repo", runs: [makeRun()] }]
+    const { container } = render(<HealthTable repoRuns={repoRuns} repos={[repo]} />)
+    const repoRow = container.querySelector(".health-repo-row")!
+    const lastRunTd = repoRow.querySelectorAll("td")[1]
+    expect(lastRunTd?.classList.contains("health-last-run")).toBe(true)
   })
 })
 
