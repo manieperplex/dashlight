@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
-import type { WorkflowRun, Workflow } from "../../types/index.js"
+import type { WorkflowRun, Workflow, SelfHostedRunner } from "../../types/index.js"
 
 // ── Mocks (must precede imports of the module under test) ─────────────────────
 
@@ -27,6 +27,7 @@ vi.mock("../../api/index.js", () => ({
   getRepoScore: vi.fn(),
   getWorkflows: vi.fn(),
   getRuns: vi.fn(),
+  getRepoRunners: vi.fn(),
 }))
 
 vi.mock("../../components/charts/RunCharts.js", () => ({
@@ -72,7 +73,7 @@ vi.mock("../../components/ui/EventBadge.js", () => ({
 
 import React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Route, triggersFromRuns, WorkflowsCard, RecentRunsCard } from "./repositories.$owner.$repo.js"
+import { Route, triggersFromRuns, WorkflowsCard, RecentRunsCard, RunnersCard } from "./repositories.$owner.$repo.js"
 
 // ── Test helpers ───────────────────────────────────────────────────────────────
 
@@ -105,6 +106,18 @@ function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
     url: "https://api.github.com/runs/1",
     htmlUrl: "https://github.com/owner/repo/actions/runs/1",
     actor: null,
+    ...overrides,
+  }
+}
+
+function makeRunner(overrides: Partial<SelfHostedRunner> = {}): SelfHostedRunner {
+  return {
+    id: ++_id,
+    name: "runner-1",
+    os: "linux",
+    status: "online",
+    busy: false,
+    labels: ["self-hosted", "linux"],
     ...overrides,
   }
 }
@@ -419,5 +432,68 @@ describe("RepositoryDetail page", () => {
     const { container } = render(<RepositoryDetail />)
     expect(screen.queryByTestId("outlet")).not.toBeInTheDocument()
     expect(container.querySelector(".health-repo-label-owner")).not.toBeNull()
+  })
+})
+
+// ── RunnersCard ───────────────────────────────────────────────────────────────
+
+describe("RunnersCard", () => {
+  it("shows nothing while loading", () => {
+    mockUseQuery.mockReturnValue({ data: undefined, isLoading: true } as ReturnType<typeof useQuery>)
+    render(<RunnersCard owner="acme" repo="api" />)
+    expect(screen.queryByText("No self-hosted runners configured.")).not.toBeInTheDocument()
+  })
+
+  it("shows empty state when runners data is undefined and not loading", () => {
+    mockUseQuery.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useQuery>)
+    render(<RunnersCard owner="acme" repo="api" />)
+    expect(screen.getByText("No self-hosted runners configured.")).toBeInTheDocument()
+  })
+
+  it("shows empty state when runners array is empty", () => {
+    mockUseQuery.mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useQuery>)
+    render(<RunnersCard owner="acme" repo="api" />)
+    expect(screen.getByText("No self-hosted runners configured.")).toBeInTheDocument()
+  })
+
+  it("renders a row per runner", () => {
+    mockUseQuery.mockReturnValue({ data: [makeRunner(), makeRunner({ name: "runner-2" })] } as ReturnType<typeof useQuery>)
+    const { container } = render(<RunnersCard owner="acme" repo="api" />)
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(2)
+  })
+
+  it("shows runner name, OS, status, and labels", () => {
+    mockUseQuery.mockReturnValue({
+      data: [makeRunner({ name: "my-runner", os: "linux", status: "online", labels: ["self-hosted", "x64"] })],
+    } as ReturnType<typeof useQuery>)
+    render(<RunnersCard owner="acme" repo="api" />)
+    expect(screen.getByText("my-runner")).toBeInTheDocument()
+    expect(screen.getByText("linux")).toBeInTheDocument()
+    expect(screen.getByText("online")).toBeInTheDocument()
+    expect(screen.getByText("self-hosted, x64")).toBeInTheDocument()
+  })
+
+  it("shows 'busy' indicator when runner is busy", () => {
+    mockUseQuery.mockReturnValue({
+      data: [makeRunner({ status: "online", busy: true })],
+    } as ReturnType<typeof useQuery>)
+    render(<RunnersCard owner="acme" repo="api" />)
+    expect(screen.getByText("online · busy")).toBeInTheDocument()
+  })
+
+  it("shows offline status for offline runner", () => {
+    mockUseQuery.mockReturnValue({
+      data: [makeRunner({ status: "offline", busy: false })],
+    } as ReturnType<typeof useQuery>)
+    render(<RunnersCard owner="acme" repo="api" />)
+    expect(screen.getByText("offline")).toBeInTheDocument()
+  })
+
+  it("shows '—' in labels cell when runner has no labels", () => {
+    mockUseQuery.mockReturnValue({
+      data: [makeRunner({ labels: [] })],
+    } as ReturnType<typeof useQuery>)
+    render(<RunnersCard owner="acme" repo="api" />)
+    expect(screen.getByText("—")).toBeInTheDocument()
   })
 })

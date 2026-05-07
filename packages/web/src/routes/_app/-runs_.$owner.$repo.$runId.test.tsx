@@ -262,9 +262,21 @@ describe("JobsCard", () => {
     expect(screen.getByText("ubuntu-22.04")).toBeInTheDocument()
   })
 
-  it("shows '—' when runner is null", () => {
-    render(<JobsCard jobs={[makeJob({ runnerName: null })]} />)
+  it("shows '—' when runner is null and labels are empty", () => {
+    render(<JobsCard jobs={[makeJob({ runnerName: null, labels: [] })]} />)
     expect(screen.getByText("—")).toBeInTheDocument()
+  })
+
+  it("shows labels when runnerName is null", () => {
+    render(<JobsCard jobs={[makeJob({ runnerName: null, labels: ["ubuntu-latest"] })]} />)
+    expect(screen.getByText("ubuntu-latest")).toBeInTheDocument()
+    expect(screen.queryByText("—")).not.toBeInTheDocument()
+  })
+
+  it("shows runnerName and labels together", () => {
+    render(<JobsCard jobs={[makeJob({ runnerName: "runner-1", labels: ["self-hosted", "linux"] })]} />)
+    expect(screen.getByText("runner-1")).toBeInTheDocument()
+    expect(screen.getByText("(self-hosted, linux)")).toBeInTheDocument()
   })
 
   it("shows job count in card header", () => {

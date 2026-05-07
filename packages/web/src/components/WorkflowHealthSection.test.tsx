@@ -17,7 +17,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-import { WorkflowHealthSection } from "./WorkflowHealthSection.js"
+import { WorkflowHealthSection, repoDisplayLabel } from "./WorkflowHealthSection.js"
 import type { WorkflowRun } from "../types/index.js"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,17 +89,39 @@ describe("WorkflowHealthSection", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it("renders the section title with configured workflow names", () => {
+  it("renders 'Workflow Health' as the section title", () => {
     const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
     render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
-    expect(screen.getByText("Workflow Health: publish, scan")).toBeInTheDocument()
+    expect(screen.getByText("Workflow Health")).toBeInTheDocument()
   })
 
-  it("renders owner and repo name inside the card", () => {
+  it("renders workflow names as a subtitle on a separate element", () => {
+    const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
+    render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
+    expect(screen.getByText("publish, scan")).toBeInTheDocument()
+  })
+
+  it("title and subtitle are separate DOM elements", () => {
+    const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
+    const { container } = render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
+    const title = container.querySelector(".card-title")
+    const subtitle = container.querySelector(".card-header .text-muted.text-small")
+    expect(title?.textContent).toBe("Workflow Health")
+    expect(subtitle?.textContent).toBe("publish, scan")
+  })
+
+  it("card-header uses stretch alignment so the subtitle span is width-constrained", () => {
+    const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
+    const { container } = render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    const header = container.querySelector(".card-header") as HTMLElement
+    expect(header.style.alignItems).toBe("stretch")
+  })
+
+  it("shows only repo short-name when there is no name collision", () => {
     const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
     render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
-    expect(screen.getByText("owner/")).toBeInTheDocument()
     expect(screen.getByText("repo")).toBeInTheDocument()
+    expect(screen.queryByText(/owner/)).not.toBeInTheDocument()
   })
 
   it("renders a run card for each matched workflow", () => {
@@ -160,8 +182,8 @@ describe("WorkflowHealthSection", () => {
     const run1 = makeRun({ workflowName: "publish" })
     const run2 = makeRun({ workflowName: "publish" })
     const repoRuns = [makeRepoRuns("owner/repo", [run1, run2])]
-    render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
-    expect(screen.getAllByText("publish")).toHaveLength(1)
+    const { container } = render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    expect(container.querySelectorAll(".latest-run-card")).toHaveLength(1)
   })
 
   it("does not render non-matching workflow runs", () => {
@@ -173,5 +195,70 @@ describe("WorkflowHealthSection", () => {
     ]
     render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
     expect(screen.queryByText("ci")).not.toBeInTheDocument()
+  })
+
+  it("does not show owner prefix when the same repo has multiple workflow cards", () => {
+    const repoRuns = [
+      makeRepoRuns("owner/api", [
+        makeRun({ workflowName: "publish" }),
+        makeRun({ workflowName: "scan" }),
+      ]),
+    ]
+    render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
+    expect(screen.queryByText(/…\//)).not.toBeInTheDocument()
+    expect(screen.getAllByText("api")).toHaveLength(2)
+  })
+
+  it("shows abbreviated owner prefix when two repos share the same short-name", () => {
+    const repoRuns = [
+      makeRepoRuns("manifold/api", [makeRun({ workflowName: "publish" })]),
+      makeRepoRuns("acmecorp/api", [makeRun({ workflowName: "publish" })]),
+    ]
+    render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    expect(screen.getByText("man…/")).toBeInTheDocument()
+    expect(screen.getByText("acm…/")).toBeInTheDocument()
+    expect(screen.getAllByText("api")).toHaveLength(2)
+  })
+
+  it("does not show owner prefix for repos whose short-name is unique", () => {
+    const repoRuns = [
+      makeRepoRuns("manifold/api",     [makeRun({ workflowName: "publish" })]),
+      makeRepoRuns("acmecorp/api",     [makeRun({ workflowName: "publish" })]),
+      makeRepoRuns("acmecorp/website", [makeRun({ workflowName: "publish" })]),
+    ]
+    render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    // "api" collides — both get prefix
+    expect(screen.getByText("man…/")).toBeInTheDocument()
+    expect(screen.getByText("acm…/")).toBeInTheDocument()
+    // "website" is unique — no prefix
+    expect(screen.getByText("website")).toBeInTheDocument()
+    expect(screen.queryByText(/acm…\/.*website/)).not.toBeInTheDocument()
+  })
+})
+
+// ── repoDisplayLabel ──────────────────────────────────────────────────────────
+
+describe("repoDisplayLabel", () => {
+  it("returns null owner when repo name is unique", () => {
+    const result = repoDisplayLabel("acme/api", new Set())
+    expect(result).toEqual({ owner: null, repo: "api" })
+  })
+
+  it("returns abbreviated owner when repo name is in the duplicate set", () => {
+    const result = repoDisplayLabel("manifold/api", new Set(["api"]))
+    expect(result).toEqual({ owner: "man…", repo: "api" })
+  })
+
+  it("abbreviation uses exactly the first 3 characters of the owner", () => {
+    const result = repoDisplayLabel("ab/api", new Set(["api"]))
+    expect(result.owner).toBe("ab…")
+
+    const result2 = repoDisplayLabel("abcdefgh/api", new Set(["api"]))
+    expect(result2.owner).toBe("abc…")
+  })
+
+  it("extracts the repo part correctly for names containing slashes only once", () => {
+    const result = repoDisplayLabel("my-org/my-repo", new Set())
+    expect(result.repo).toBe("my-repo")
   })
 })

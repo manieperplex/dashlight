@@ -9,6 +9,7 @@ export const TTL = {
   workflows: 10 * 60 * 1000,
   repos: 15 * 60 * 1000,
   orgs: 30 * 60 * 1000,
+  runners: 5 * 60 * 1000,
   score: 24 * 60 * 60 * 1000,
   yaml: 7 * 24 * 60 * 60 * 1000,
   logs: 7 * 24 * 60 * 60 * 1000,
