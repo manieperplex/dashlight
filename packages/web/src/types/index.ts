@@ -127,6 +127,15 @@ export interface RunArtifact {
   expired: boolean
 }
 
+export interface SelfHostedRunner {
+  id: number
+  name: string
+  os: string
+  status: "online" | "offline"
+  busy: boolean
+  labels: string[]
+}
+
 // ── Scoring ───────────────────────────────────────────────────────────────────
 
 export interface CheckResult {
