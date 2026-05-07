@@ -17,7 +17,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-import { WorkflowHealthSection } from "./WorkflowHealthSection.js"
+import { WorkflowHealthSection, repoDisplayLabel } from "./WorkflowHealthSection.js"
 import type { WorkflowRun } from "../types/index.js"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -117,11 +117,11 @@ describe("WorkflowHealthSection", () => {
     expect(header.style.alignItems).toBe("stretch")
   })
 
-  it("renders owner and repo name inside the card", () => {
+  it("shows only repo short-name when there is no name collision", () => {
     const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
     render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
-    expect(screen.getByText("owner/")).toBeInTheDocument()
     expect(screen.getByText("repo")).toBeInTheDocument()
+    expect(screen.queryByText(/owner/)).not.toBeInTheDocument()
   })
 
   it("renders a run card for each matched workflow", () => {
@@ -195,5 +195,70 @@ describe("WorkflowHealthSection", () => {
     ]
     render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
     expect(screen.queryByText("ci")).not.toBeInTheDocument()
+  })
+
+  it("does not show owner prefix when the same repo has multiple workflow cards", () => {
+    const repoRuns = [
+      makeRepoRuns("owner/api", [
+        makeRun({ workflowName: "publish" }),
+        makeRun({ workflowName: "scan" }),
+      ]),
+    ]
+    render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
+    expect(screen.queryByText(/…\//)).not.toBeInTheDocument()
+    expect(screen.getAllByText("api")).toHaveLength(2)
+  })
+
+  it("shows abbreviated owner prefix when two repos share the same short-name", () => {
+    const repoRuns = [
+      makeRepoRuns("manifold/api", [makeRun({ workflowName: "publish" })]),
+      makeRepoRuns("acmecorp/api", [makeRun({ workflowName: "publish" })]),
+    ]
+    render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    expect(screen.getByText("man…/")).toBeInTheDocument()
+    expect(screen.getByText("acm…/")).toBeInTheDocument()
+    expect(screen.getAllByText("api")).toHaveLength(2)
+  })
+
+  it("does not show owner prefix for repos whose short-name is unique", () => {
+    const repoRuns = [
+      makeRepoRuns("manifold/api",     [makeRun({ workflowName: "publish" })]),
+      makeRepoRuns("acmecorp/api",     [makeRun({ workflowName: "publish" })]),
+      makeRepoRuns("acmecorp/website", [makeRun({ workflowName: "publish" })]),
+    ]
+    render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    // "api" collides — both get prefix
+    expect(screen.getByText("man…/")).toBeInTheDocument()
+    expect(screen.getByText("acm…/")).toBeInTheDocument()
+    // "website" is unique — no prefix
+    expect(screen.getByText("website")).toBeInTheDocument()
+    expect(screen.queryByText(/acm…\/.*website/)).not.toBeInTheDocument()
+  })
+})
+
+// ── repoDisplayLabel ──────────────────────────────────────────────────────────
+
+describe("repoDisplayLabel", () => {
+  it("returns null owner when repo name is unique", () => {
+    const result = repoDisplayLabel("acme/api", new Set())
+    expect(result).toEqual({ owner: null, repo: "api" })
+  })
+
+  it("returns abbreviated owner when repo name is in the duplicate set", () => {
+    const result = repoDisplayLabel("manifold/api", new Set(["api"]))
+    expect(result).toEqual({ owner: "man…", repo: "api" })
+  })
+
+  it("abbreviation uses exactly the first 3 characters of the owner", () => {
+    const result = repoDisplayLabel("ab/api", new Set(["api"]))
+    expect(result.owner).toBe("ab…")
+
+    const result2 = repoDisplayLabel("abcdefgh/api", new Set(["api"]))
+    expect(result2.owner).toBe("abc…")
+  })
+
+  it("extracts the repo part correctly for names containing slashes only once", () => {
+    const result = repoDisplayLabel("my-org/my-repo", new Set())
+    expect(result.repo).toBe("my-repo")
   })
 })

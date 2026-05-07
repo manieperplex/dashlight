@@ -24,6 +24,22 @@ function pickRun(runs: WorkflowRun[]): WorkflowRun | undefined {
   return runs.find((r) => r.status === "in_progress" || r.status === "queued") ?? runs[0]
 }
 
+/**
+ * Returns the display label for a repo within a set of cards.
+ * Normally just the repo short-name; when another card shares that
+ * short-name (different owner), prefixes the first 3 chars of the
+ * owner followed by "…/" to disambiguate — e.g. "man…/api".
+ */
+export function repoDisplayLabel(fullName: string, duplicateRepoNames: Set<string>): { owner: string | null; repo: string } {
+  const slash = fullName.indexOf("/")
+  const owner = fullName.slice(0, slash)
+  const repo = fullName.slice(slash + 1)
+  if (duplicateRepoNames.has(repo)) {
+    return { owner: `${owner.slice(0, 3)}…`, repo }
+  }
+  return { owner: null, repo }
+}
+
 // ── Run dot ───────────────────────────────────────────────────────────────────
 
 function RunDot({ status, conclusion }: { status: WorkflowRun["status"]; conclusion: WorkflowRun["conclusion"] }) {
@@ -38,13 +54,20 @@ function RunDot({ status, conclusion }: { status: WorkflowRun["status"]; conclus
 
 // ── Single run card ───────────────────────────────────────────────────────────
 
-function HealthRunCard({ run, fullName }: { run: WorkflowRun; fullName: string }) {
-  const [owner, repo] = fullName.split("/")
+function HealthRunCard({ run, fullName, duplicateRepoNames }: {
+  run: WorkflowRun
+  fullName: string
+  duplicateRepoNames: Set<string>
+}) {
+  const slash = fullName.indexOf("/")
+  const ownerRaw = fullName.slice(0, slash)
+  const repo = fullName.slice(slash + 1)
   const isActive = run.status === "in_progress" || run.status === "queued"
   const commitUrl = `https://github.com/${fullName}/commit/${run.headSha}`
   const duration = formatDuration(run.runStartedAt, isActive ? null : run.updatedAt)
   const variant = runStatusVariant(run.status, run.conclusion)
   const color = VARIANT_COLOR[variant]
+  const { owner: ownerPrefix } = repoDisplayLabel(fullName, duplicateRepoNames)
 
   return (
     <div
@@ -58,12 +81,12 @@ function HealthRunCard({ run, fullName }: { run: WorkflowRun; fullName: string }
         title={fullName}
         style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
       >
-        <span className="health-repo-label-owner">{owner}/</span>{repo}
+        {ownerPrefix && <span className="health-repo-label-owner">{ownerPrefix}/</span>}{repo}
       </div>
       <div className="flex-center gap-2" style={{ justifyContent: "space-between", minWidth: 0 }}>
         <Link
           to="/runs/$owner/$repo/$runId"
-          params={{ owner: owner!, repo: repo!, runId: String(run.id) }}
+          params={{ owner: ownerRaw, repo, runId: String(run.id) }}
           className="latest-run-workflow latest-run-card-link truncate"
         >
           {run.workflowName ?? run.name}
@@ -148,6 +171,21 @@ export function WorkflowHealthSection({ watchWorkflows, repoRuns }: WorkflowHeal
 
   if (cards.length === 0) return null
 
+  // Detect repo short-names that appear under more than one distinct owner
+  const repoOwnerMap = new Map<string, Set<string>>()
+  for (const { fullName } of cards) {
+    const slash = fullName.indexOf("/")
+    const owner = fullName.slice(0, slash)
+    const repo = fullName.slice(slash + 1)
+    if (!repoOwnerMap.has(repo)) repoOwnerMap.set(repo, new Set())
+    repoOwnerMap.get(repo)!.add(owner)
+  }
+  const duplicateRepoNames = new Set(
+    [...repoOwnerMap.entries()]
+      .filter(([, owners]) => owners.size > 1)
+      .map(([repo]) => repo)
+  )
+
   return (
     <Card>
       <div className="card-header" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.2rem" }}>
@@ -156,7 +194,7 @@ export function WorkflowHealthSection({ watchWorkflows, repoRuns }: WorkflowHeal
       </div>
       <div className="latest-runs-grid">
         {cards.map(({ fullName, run }) => (
-          <HealthRunCard key={`${fullName}/${run.workflowId}`} run={run} fullName={fullName} />
+          <HealthRunCard key={`${fullName}/${run.workflowId}`} run={run} fullName={fullName} duplicateRepoNames={duplicateRepoNames} />
         ))}
       </div>
     </Card>
