@@ -150,8 +150,9 @@ export function WorkflowHealthSection({ watchWorkflows, repoRuns }: WorkflowHeal
 
   return (
     <Card>
-      <div className="card-header">
-        <TruncatingTitle prefix="Workflow Health" items={watchWorkflows} className="card-title" />
+      <div className="card-header" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.2rem" }}>
+        <span className="card-title">Workflow Health</span>
+        <TruncatingTitle items={watchWorkflows} className="text-muted text-small" />
       </div>
       <div className="latest-runs-grid">
         {cards.map(({ fullName, run }) => (

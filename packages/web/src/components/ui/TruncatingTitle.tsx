@@ -1,7 +1,8 @@
 import { useState, useRef, useLayoutEffect, useEffect } from "react"
 
 interface TruncatingTitleProps {
-  prefix: string
+  /** Optional label prepended as `prefix: items`. Omit to render items only. */
+  prefix?: string
   items: string[]
   className?: string
   /**
@@ -28,7 +29,7 @@ const defaultIsOverflowing = (el: HTMLSpanElement) => el.scrollWidth > el.client
  * side-effects from empty-string → non-empty transitions.
  */
 export function TruncatingTitle({
-  prefix,
+  prefix = "",
   items,
   className,
   _isOverflowing = defaultIsOverflowing,
@@ -53,13 +54,15 @@ export function TruncatingTitle({
     // Greedy search: reduce count until truncated text fits (min 1).
     // useLayoutEffect + setState is intentional: fires before paint so the
     // browser never renders the intermediate probe strings.
+    const fmt = (text: string) => prefix ? `${prefix}: ${text}` : text
+
     let count = items.length
-    probe(`${prefix}: ${items.join(", ")}`)
+    probe(fmt(items.join(", ")))
     if (_isOverflowing(el)) {
       while (count > 1) {
         count--
         const hidden = items.length - count
-        probe(`${prefix}: ${items.slice(0, count).join(", ")} +${hidden} more`)
+        probe(fmt(`${items.slice(0, count).join(", ")} +${hidden} more`))
         if (!_isOverflowing(el)) break
       }
     }
@@ -87,7 +90,7 @@ export function TruncatingTitle({
       className={className}
       style={{ whiteSpace: "nowrap", overflow: "hidden", display: "block", minWidth: 0, flex: 1 }}
     >
-      {`${prefix}: ${displayed}${suffix}`}
+      {prefix ? `${prefix}: ${displayed}${suffix}` : `${displayed}${suffix}`}
     </span>
   )
 }

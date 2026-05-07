@@ -146,6 +146,24 @@ describe("TruncatingTitle", () => {
     expect(screen.getByText("X: a +2 more")).toBeInTheDocument()
   })
 
+  // ── Prefix-less mode ───────────────────────────────────────────────────────
+
+  it("renders items without a prefix or colon when prefix is omitted", () => {
+    render(<TruncatingTitle items={["publish", "scan"]} />)
+    expect(screen.getByText("publish, scan")).toBeInTheDocument()
+    expect(screen.queryByText(/:/)).not.toBeInTheDocument()
+  })
+
+  it("truncates correctly with no prefix", () => {
+    render(
+      <TruncatingTitle
+        items={["publish", "scan", "deploy"]}
+        _isOverflowing={() => true}
+      />
+    )
+    expect(screen.getByText("publish +2 more")).toBeInTheDocument()
+  })
+
   // ── ResizeObserver lifecycle ────────────────────────────────────────────────
 
   it("sets up a ResizeObserver on mount", () => {

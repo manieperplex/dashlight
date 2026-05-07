@@ -89,10 +89,32 @@ describe("WorkflowHealthSection", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it("renders the section title with configured workflow names", () => {
+  it("renders 'Workflow Health' as the section title", () => {
     const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
     render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
-    expect(screen.getByText("Workflow Health: publish, scan")).toBeInTheDocument()
+    expect(screen.getByText("Workflow Health")).toBeInTheDocument()
+  })
+
+  it("renders workflow names as a subtitle on a separate element", () => {
+    const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
+    render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
+    expect(screen.getByText("publish, scan")).toBeInTheDocument()
+  })
+
+  it("title and subtitle are separate DOM elements", () => {
+    const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
+    const { container } = render(<WorkflowHealthSection watchWorkflows={["publish", "scan"]} repoRuns={repoRuns} />)
+    const title = container.querySelector(".card-title")
+    const subtitle = container.querySelector(".card-header .text-muted.text-small")
+    expect(title?.textContent).toBe("Workflow Health")
+    expect(subtitle?.textContent).toBe("publish, scan")
+  })
+
+  it("card-header uses stretch alignment so the subtitle span is width-constrained", () => {
+    const repoRuns = [makeRepoRuns("owner/repo", [makeRun({ workflowName: "publish" })])]
+    const { container } = render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    const header = container.querySelector(".card-header") as HTMLElement
+    expect(header.style.alignItems).toBe("stretch")
   })
 
   it("renders owner and repo name inside the card", () => {
@@ -160,8 +182,8 @@ describe("WorkflowHealthSection", () => {
     const run1 = makeRun({ workflowName: "publish" })
     const run2 = makeRun({ workflowName: "publish" })
     const repoRuns = [makeRepoRuns("owner/repo", [run1, run2])]
-    render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
-    expect(screen.getAllByText("publish")).toHaveLength(1)
+    const { container } = render(<WorkflowHealthSection watchWorkflows={["publish"]} repoRuns={repoRuns} />)
+    expect(container.querySelectorAll(".latest-run-card")).toHaveLength(1)
   })
 
   it("does not render non-matching workflow runs", () => {
