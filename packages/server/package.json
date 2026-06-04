@@ -15,19 +15,19 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.14",
-    "hono": "^4.12.18",
-    "jose": "^6.2.2",
+    "@hono/node-server": "^2.0.1",
+    "hono": "^4.12.23",
+    "jose": "^6.2.3",
     "js-yaml": "^4.1.1",
-    "lru-cache": "^11.3.5",
-    "undici": "^8.1.0"
+    "lru-cache": "^11.5.0",
+    "undici": "^8.3.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.3",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:",
     "vitest": "catalog:"
