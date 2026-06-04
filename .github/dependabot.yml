@@ -68,9 +68,8 @@ updates:
   # ============================================================================
   - package-ecosystem: docker
     directories:
-      - "/cerberus/tools"
-    registries:
-      - github-private-repos
+      - "/web/Dockerfile"
+      - "/server/Dockerfile"
     schedule:
       interval: weekly
       day: sunday
