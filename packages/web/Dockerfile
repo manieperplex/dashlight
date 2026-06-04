@@ -1,5 +1,5 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 
 # Docker Desktop's build network has no IPv6 routing; force Node.js to prefer
 # IPv4 so npm/pnpm can reach registry.npmjs.org without timing out.
