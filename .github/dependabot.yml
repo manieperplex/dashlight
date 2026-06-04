@@ -68,8 +68,8 @@ updates:
   # ============================================================================
   - package-ecosystem: docker
     directories:
-      - "/web/Dockerfile"
-      - "/server/Dockerfile"
+      - "packages/web/Dockerfile"
+      - "packages/server/Dockerfile"
     schedule:
       interval: weekly
       day: sunday
