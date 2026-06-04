@@ -22,6 +22,14 @@ updates:
       prefix: "chore(server):"
       include: "scope"
     groups:
+      tooling:
+        applies-to: version-updates
+        patterns:
+          - "eslint"
+          - "typescript*"
+          - "@typescript-eslint/*"
+          - "vitest"
+          - "@vitest/*"
       version-all:
         applies-to: version-updates
         patterns: ["*"]
@@ -53,6 +61,14 @@ updates:
       prefix: "chore(web):"
       include: "scope"
     groups:
+      tooling:
+        applies-to: version-updates
+        patterns:
+          - "eslint"
+          - "typescript*"
+          - "@typescript-eslint/*"
+          - "vitest"
+          - "@vitest/*"
       version-all:
         applies-to: version-updates
         patterns: ["*"]
