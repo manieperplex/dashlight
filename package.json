@@ -33,7 +33,7 @@
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "conventional-recommended-bump": "^11.2.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.0.2",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
