@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
     "tsx": "^4.22.3",
