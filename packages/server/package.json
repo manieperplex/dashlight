@@ -16,15 +16,15 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.1",
-    "hono": "^4.12.23",
+    "hono": "^4.12.25",
     "jose": "^6.2.3",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.2.0",
     "lru-cache": "^11.5.0",
-    "undici": "^8.3.0"
+    "undici": "^8.4.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
     "tsx": "^4.22.3",
