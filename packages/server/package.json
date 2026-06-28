@@ -15,8 +15,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.1",
-    "hono": "^4.12.25",
+    "@hono/node-server": "^2.0.5",
+    "hono": "^4.12.26",
     "jose": "^6.2.3",
     "js-yaml": "^4.2.0",
     "lru-cache": "^11.5.0",
