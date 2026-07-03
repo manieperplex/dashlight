@@ -10,6 +10,7 @@ import type {
   WorkflowJob,
   RunArtifact,
   RepositoryScore,
+  SelfHostedRunner,
   RunStatus,
   RunConclusion,
 } from "../types/index.js"
@@ -49,6 +50,11 @@ interface GHJob {
 }
 interface GHArtifact {
   id: number; name: string; size_in_bytes: number; expired: boolean
+}
+interface GHRunner {
+  id: number; name: string; os: string
+  status: "online" | "offline"; busy: boolean
+  labels: Array<{ id: number; name: string; type: string }>
 }
 
 // ── Normalizers ───────────────────────────────────────────────────────────────
@@ -130,6 +136,17 @@ function normalizeJob(j: GHJob): WorkflowJob {
       startedAt: s.started_at,
       completedAt: s.completed_at,
     })),
+  }
+}
+
+function normalizeRunner(r: GHRunner): SelfHostedRunner {
+  return {
+    id: r.id,
+    name: r.name,
+    os: r.os,
+    status: r.status,
+    busy: r.busy,
+    labels: r.labels.map((l) => l.name),
   }
 }
 
@@ -298,6 +315,13 @@ export async function cancelRun(owner: string, repo: string, runId: number): Pro
     `/proxy/repos/${owner}/${repo}/actions/runs/${runId}/cancel`,
     { method: "POST" }
   )
+}
+
+export async function getRepoRunners(owner: string, repo: string): Promise<SelfHostedRunner[]> {
+  const res = await fetchApi<{ runners: GHRunner[] }>(
+    `/proxy/repos/${owner}/${repo}/actions/runners`
+  )
+  return (res.runners ?? []).map(normalizeRunner)
 }
 
 // ── Scoring ───────────────────────────────────────────────────────────────────

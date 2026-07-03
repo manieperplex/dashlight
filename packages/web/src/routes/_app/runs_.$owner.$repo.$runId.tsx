@@ -280,7 +280,18 @@ export function JobsCard({
                       {job.steps.filter((s) => s.conclusion === "success").length} / {job.steps.length}
                     </td>
                     <td className="text-muted text-small">{formatDuration(job.startedAt, job.completedAt)}</td>
-                    <td className="text-muted text-small mono">{job.runnerName ?? "—"}</td>
+                    <td className="text-muted text-small">
+                      {job.runnerName
+                        ? <>
+                            <span className="mono">{job.runnerName}</span>
+                            {job.labels.length > 0 && (
+                              <span className="text-muted"> ({job.labels.join(", ")})</span>
+                            )}
+                          </>
+                        : job.labels.length > 0
+                          ? <span className="mono">{job.labels.join(", ")}</span>
+                          : "—"}
+                    </td>
                   </tr>
                   {expanded.has(job.id) && (
                     <tr className="job-expansion-row">

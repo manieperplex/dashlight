@@ -233,6 +233,7 @@ function resolveTtl(path: string): number {
   if (path.match(/\/repos\/[^/]+\/[^/]+\/check-runs/)) return TTL.annotations
   if (path.match(/\/repos\/[^/]+\/[^/]+\/git\/trees/)) return TTL.yaml
   if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/jobs\/[^/]+\/logs/)) return TTL.logs
+  if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/runners/)) return TTL.runners
   if (
     path.match(/\/repos\/[^/]+\/[^/]+\/community\/profile/) ||
     path.match(/\/repos\/[^/]+\/[^/]+\/branches\/[^/]+\/protection/)

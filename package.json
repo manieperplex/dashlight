@@ -1,6 +1,6 @@
 {
   "name": "dashlight",
-  "version": "1.0.0-rc.2",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "prepare": "husky",
@@ -22,11 +22,24 @@
     "packages/server/src/**/*.ts": "pnpm --filter @dashlight/server exec eslint --fix",
     "packages/web/src/**/*.{ts,tsx}": "pnpm --filter @dashlight/web exec eslint --fix"
   },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "eslint-plugin-react-hooks>eslint": ">=10"
+      }
+    },
+    "overrides": {
+      "brace-expansion": "^5.0.6",
+      "esbuild": "^0.28.1",
+      "@babel/core": "^7.29.7"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "devDependencies": {
-    "conventional-changelog-conventionalcommits": "^9.3.1",
-    "conventional-recommended-bump": "^11.2.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.0.2",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

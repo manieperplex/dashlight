@@ -1,5 +1,5 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 
 # Docker Desktop's build network has no IPv6 routing; force Node.js to prefer
 # IPv4 so npm/pnpm can reach registry.npmjs.org without timing out.
@@ -54,7 +54,7 @@ RUN pnpm --filter @dashlight/web build
 
 # ── Runtime stage (Nginx) ─────────────────────────────────────────────────────
 # The nginx runner serves only static files — no outbound HTTPS, no cert bundle needed.
-FROM nginx:1.29.8-alpine AS runner
+FROM nginx:1.31.2-alpine AS runner
 
 COPY --from=builder /app/packages/web/dist /usr/share/nginx/html
 COPY packages/web/nginx.conf /etc/nginx/conf.d/default.conf

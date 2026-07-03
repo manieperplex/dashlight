@@ -1,5 +1,10 @@
 services:
   server:
+    labels:
+      com.docker.compose.project: "dashlight"
+      com.docker.compose.service: "server"
+      com.docker.compose.project.version: "1.0.0"
+      keep: "true"
     build:
       context: .
       dockerfile: packages/server/Dockerfile
@@ -39,6 +44,11 @@ services:
     restart: unless-stopped
 
   web:
+    labels:
+      com.docker.compose.project: "dashlight"
+      com.docker.compose.service: "web"
+      com.docker.compose.project.version: "1.0.0"
+      keep: "true"
     build:
       context: .
       dockerfile: packages/web/Dockerfile

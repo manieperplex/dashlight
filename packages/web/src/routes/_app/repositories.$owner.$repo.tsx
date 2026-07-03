@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { getRepo, getRepoScore, getWorkflows, getRuns } from "../../api/index.js"
+import { getRepo, getRepoScore, getWorkflows, getRuns, getRepoRunners } from "../../api/index.js"
 import { StatusBadge, TierBadge } from "../../components/ui/Badge.js"
 import { Button } from "../../components/ui/Button.js"
 import { Card, CardHeader } from "../../components/ui/Card.js"
@@ -8,7 +8,7 @@ import { PageSpinner } from "../../components/ui/Spinner.js"
 import { BuildTrendChart, DurationChart } from "../../components/charts/RunCharts.js"
 import { EventBadge } from "../../components/ui/EventBadge.js"
 import { formatRelativeTime, formatDuration, formatDateTime } from "../../lib/utils.js"
-import type { RepositoryScore, WorkflowRun } from "../../types/index.js"
+import type { RepositoryScore, SelfHostedRunner, WorkflowRun } from "../../types/index.js"
 
 export const Route = createFileRoute("/_app/repositories/$owner/$repo")({
   component: RepositoryDetail,
@@ -55,6 +55,7 @@ function RepositoryDetail() {
       <div className="stack">
         <WorkflowsCard owner={owner} repo={repo} />
         <BuildChartsCard owner={owner} repo={repo} />
+        <RunnersCard owner={owner} repo={repo} />
         <RecentRunsCard owner={owner} repo={repo} />
         <ScoreCard owner={owner} repo={repo} />
       </div>
@@ -239,6 +240,56 @@ function BuildChartsCard({ owner, repo }: { owner: string; repo: string }) {
         </div>
       </div>
     </Card>
+  )
+}
+
+export function RunnersCard({ owner, repo }: { owner: string; repo: string }) {
+  const { data: runners, isLoading } = useQuery({
+    queryKey: ["runners", owner, repo],
+    queryFn: () => getRepoRunners(owner, repo),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  return (
+    <Card>
+      <CardHeader title="Runners" />
+      {isLoading ? null : !runners || runners.length === 0 ? (
+        <p className="text-muted text-small">No self-hosted runners configured.</p>
+      ) : (
+        <RunnersTable runners={runners} />
+      )}
+    </Card>
+  )
+}
+
+function RunnersTable({ runners }: { runners: SelfHostedRunner[] }) {
+  return (
+    <div className="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>OS</th>
+            <th>Status</th>
+            <th>Labels</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runners.map((r) => (
+            <tr key={r.id}>
+              <td className="mono">{r.name}</td>
+              <td className="text-small text-muted">{r.os}</td>
+              <td>
+                <span className={r.status === "online" ? "badge badge-success" : "badge badge-neutral"}>
+                  {r.status}{r.busy ? " · busy" : ""}
+                </span>
+              </td>
+              <td className="text-small text-muted">{r.labels.length > 0 ? r.labels.join(", ") : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
