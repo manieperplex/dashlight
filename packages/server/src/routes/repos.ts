@@ -9,6 +9,9 @@ const repos = new Hono<AuthEnv>()
 
 repos.use("/*", authMiddleware)
 
+/** Max pages to fetch when paginating (safety cap: 100 pages × 100 per_page = 10 000 repos). */
+const MAX_PAGES = 100
+
 function getRepoFilter(): string[] | null {
   const raw = process.env["GITHUB_REPOS"]
   if (!raw?.trim()) return null
@@ -18,6 +21,31 @@ function getRepoFilter(): string[] | null {
 function getOrgFilter(): string | null {
   const raw = process.env["GITHUB_ORG"]
   return raw?.trim() || null
+}
+
+/**
+ * Fetch all pages of a GitHub list endpoint that returns an array.
+ * Stops when a page returns fewer items than per_page (last page).
+ */
+export async function fetchAllPages<T>(
+  token: string,
+  basePath: string,
+  perPage = 100,
+  maxPages = MAX_PAGES,
+): Promise<T[]> {
+  const all: T[] = []
+  const separator = basePath.includes("?") ? "&" : "?"
+
+  for (let page = 1; page <= maxPages; page++) {
+    const { data } = await githubFetch<T[]>(
+      token,
+      `${basePath}${separator}per_page=${perPage}&page=${page}`,
+    )
+    all.push(...data)
+    if (data.length < perPage) break
+  }
+
+  return all
 }
 
 /**
@@ -76,7 +104,7 @@ repos.get("/", async (c) => {
         return c.json(cached)
       }
       c.header("X-Cache", "MISS")
-      const { data } = await githubFetch<unknown>(token, `/orgs/${orgFilter}/repos?sort=pushed&per_page=100`)
+      const data = await fetchAllPages(token, `/orgs/${orgFilter}/repos?sort=pushed`)
       cacheSet(key, data, TTL.repos)
       return c.json(data)
     }
@@ -89,7 +117,7 @@ repos.get("/", async (c) => {
       return c.json(cached)
     }
     c.header("X-Cache", "MISS")
-    const { data } = await githubFetch<unknown>(token, "/user/repos?sort=pushed&per_page=100")
+    const data = await fetchAllPages(token, "/user/repos?sort=pushed")
     cacheSet(key, data, TTL.repos)
     return c.json(data)
   } catch (err) {
