@@ -28,7 +28,7 @@ function Dashboard() {
     staleTime: Infinity,
   })
 
-  const repoList = (repos ?? []).slice(0, 10)
+  const repoList = repos ?? []
 
   // useQueries handles a dynamic-length array without violating Rules of Hooks
   const runResults = useQueries({
