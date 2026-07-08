@@ -67,7 +67,6 @@ export function TruncatingTitle({
       }
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- useLayoutEffect+setState is the recommended React pattern for pre-paint DOM measurement
     setVisibleCount(count)
   }, [prefix, items, _isOverflowing, sizeTrigger])
 

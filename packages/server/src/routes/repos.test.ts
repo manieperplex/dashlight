@@ -37,7 +37,7 @@ vi.mock("../lib/logger.js", () => ({
 
 import { githubFetch, GitHubNotFoundError, GitHubApiError } from "../lib/github.js"
 import { cacheGet, cacheSet } from "../lib/cache.js"
-import reposRouter from "./repos.js"
+import reposRouter, { fetchAllPages } from "./repos.js"
 
 const mockGithubFetch = vi.mocked(githubFetch)
 const mockCacheGet = vi.mocked(cacheGet)
@@ -59,6 +59,11 @@ function githubResult(data: unknown) {
   return { data, rateLimitRemaining: 100, rateLimitReset: null, status: 200, etag: null, grantedScopes: null }
 }
 
+/** Create an array of N repo objects for pagination tests. */
+function makeRepos(count: number, prefix = "org/repo") {
+  return Array.from({ length: count }, (_, i) => repoData(`${prefix}-${i}`))
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockCacheGet.mockReturnValue(undefined)
@@ -71,10 +76,73 @@ afterEach(() => {
   delete process.env["GITHUB_ORG"]
 })
 
+// ── fetchAllPages (unit) ─────────────────────────────────────────────────────
+
+describe("fetchAllPages", () => {
+  it("returns all items from a single page when count < perPage", async () => {
+    const repos = makeRepos(50)
+    mockGithubFetch.mockResolvedValueOnce(githubResult(repos))
+
+    const result = await fetchAllPages("tok", "/user/repos?sort=pushed", 100)
+
+    expect(result).toHaveLength(50)
+    expect(mockGithubFetch).toHaveBeenCalledTimes(1)
+    expect(mockGithubFetch).toHaveBeenCalledWith("tok", "/user/repos?sort=pushed&per_page=100&page=1")
+  })
+
+  it("fetches multiple pages until a partial page is returned", async () => {
+    const page1 = makeRepos(100, "org/a")
+    const page2 = makeRepos(100, "org/b")
+    const page3 = makeRepos(30, "org/c") // partial → last page
+    mockGithubFetch
+      .mockResolvedValueOnce(githubResult(page1))
+      .mockResolvedValueOnce(githubResult(page2))
+      .mockResolvedValueOnce(githubResult(page3))
+
+    const result = await fetchAllPages("tok", "/orgs/myorg/repos?sort=pushed", 100)
+
+    expect(result).toHaveLength(230)
+    expect(mockGithubFetch).toHaveBeenCalledTimes(3)
+    expect(mockGithubFetch).toHaveBeenCalledWith("tok", "/orgs/myorg/repos?sort=pushed&per_page=100&page=1")
+    expect(mockGithubFetch).toHaveBeenCalledWith("tok", "/orgs/myorg/repos?sort=pushed&per_page=100&page=2")
+    expect(mockGithubFetch).toHaveBeenCalledWith("tok", "/orgs/myorg/repos?sort=pushed&per_page=100&page=3")
+  })
+
+  it("stops after an empty page", async () => {
+    const page1 = makeRepos(100)
+    mockGithubFetch
+      .mockResolvedValueOnce(githubResult(page1))
+      .mockResolvedValueOnce(githubResult([]))
+
+    const result = await fetchAllPages("tok", "/user/repos?sort=pushed", 100)
+
+    expect(result).toHaveLength(100)
+    expect(mockGithubFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it("respects the maxPages safety cap", async () => {
+    // Always return a full page to simulate infinite pagination
+    mockGithubFetch.mockResolvedValue(githubResult(makeRepos(100)))
+
+    const result = await fetchAllPages("tok", "/user/repos?sort=pushed", 100, 3)
+
+    expect(result).toHaveLength(300)
+    expect(mockGithubFetch).toHaveBeenCalledTimes(3)
+  })
+
+  it("appends query params correctly when basePath has no existing params", async () => {
+    mockGithubFetch.mockResolvedValueOnce(githubResult([]))
+
+    await fetchAllPages("tok", "/user/repos", 100)
+
+    expect(mockGithubFetch).toHaveBeenCalledWith("tok", "/user/repos?per_page=100&page=1")
+  })
+})
+
 // ── Default mode (no env vars) ────────────────────────────────────────────────
 
 describe("GET /api/repos — default mode (no env vars)", () => {
-  it("fetches /user/repos and returns data", async () => {
+  it("fetches /user/repos with pagination and returns data", async () => {
     const data = [repoData("owner/repo1"), repoData("owner/repo2")]
     mockGithubFetch.mockResolvedValueOnce(githubResult(data))
 
@@ -105,6 +173,21 @@ describe("GET /api/repos — default mode (no env vars)", () => {
 
     expect(mockCacheSet).toHaveBeenCalledWith(expect.any(String), data, expect.any(Number))
   })
+
+  it("paginates through all user repos", async () => {
+    const page1 = makeRepos(100, "owner/a")
+    const page2 = makeRepos(20, "owner/b")
+    mockGithubFetch
+      .mockResolvedValueOnce(githubResult(page1))
+      .mockResolvedValueOnce(githubResult(page2))
+
+    const res = await makeApp().request("/api/repos")
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as unknown[]
+    expect(body).toHaveLength(120)
+    expect(mockGithubFetch).toHaveBeenCalledTimes(2)
+  })
 })
 
 // ── GITHUB_ORG mode ────────────────────────────────────────────────────────────
@@ -112,7 +195,7 @@ describe("GET /api/repos — default mode (no env vars)", () => {
 describe("GET /api/repos — GITHUB_ORG mode", () => {
   beforeEach(() => { process.env["GITHUB_ORG"] = "myorg" })
 
-  it("fetches /orgs/myorg/repos and returns data", async () => {
+  it("fetches /orgs/myorg/repos with pagination and returns data", async () => {
     const data = [repoData("myorg/alpha"), repoData("myorg/beta")]
     mockGithubFetch.mockResolvedValueOnce(githubResult(data))
 
@@ -146,6 +229,23 @@ describe("GET /api/repos — GITHUB_ORG mode", () => {
 
     // Falls through to default mode — must fetch /user/repos
     expect(mockGithubFetch).toHaveBeenCalledWith("tok", expect.stringContaining("/user/repos"))
+  })
+
+  it("paginates through all org repos", async () => {
+    const page1 = makeRepos(100, "myorg/a")
+    const page2 = makeRepos(100, "myorg/b")
+    const page3 = makeRepos(50, "myorg/c")
+    mockGithubFetch
+      .mockResolvedValueOnce(githubResult(page1))
+      .mockResolvedValueOnce(githubResult(page2))
+      .mockResolvedValueOnce(githubResult(page3))
+
+    const res = await makeApp().request("/api/repos")
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as unknown[]
+    expect(body).toHaveLength(250)
+    expect(mockGithubFetch).toHaveBeenCalledTimes(3)
   })
 })
 
