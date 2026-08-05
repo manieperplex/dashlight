@@ -16,11 +16,11 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
-    "hono": "^4.12.32",
+    "hono": "^4.12.34",
     "jose": "^6.2.4",
-    "js-yaml": "^5.2.1",
+    "js-yaml": "^5.2.2",
     "lru-cache": "^11.5.2",
-    "undici": "^8.8.0"
+    "undici": "^8.9.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
