@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { fetchApi, fetchApiText, ApiError } from "./client.js"
+import { fetchApi, fetchApiText, ApiError, getLastGitHubFetchAt, subscribeLastGitHubFetchAt } from "./client.js"
 
-function mockFetch(status: number, body: unknown, ok = status >= 200 && status < 300) {
+function mockFetch(
+  status: number,
+  body: unknown,
+  ok = status >= 200 && status < 300,
+  headers?: Record<string, string>,
+) {
   return vi.fn().mockResolvedValue({
     ok,
     status,
+    headers: new Headers(headers),
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
   })
@@ -99,5 +105,81 @@ describe("fetchApiText", () => {
     vi.stubGlobal("fetch", mockFetch(404, "not found", false))
     await expect(fetchApiText("/api/logs")).rejects.toThrow(ApiError)
     await expect(fetchApiText("/api/logs")).rejects.toThrow("HTTP 404")
+  })
+})
+
+// ── X-Cache tracking (lastGitHubFetchAt) ─────────────────────────────────────
+
+describe("lastGitHubFetchAt tracking", () => {
+  it("updates on X-Cache: MISS from fetchApi", async () => {
+    const before = Date.now()
+    vi.stubGlobal("fetch", mockFetch(200, { ok: true }, true, { "X-Cache": "MISS" }))
+    await fetchApi("/proxy/repos/owner/repo/actions/runs")
+    const ts = getLastGitHubFetchAt()
+    expect(ts).toBeGreaterThanOrEqual(before)
+    expect(ts).toBeLessThanOrEqual(Date.now())
+  })
+
+  it("does not update on X-Cache: HIT from fetchApi", async () => {
+    // First set a baseline with a MISS
+    vi.stubGlobal("fetch", mockFetch(200, {}, true, { "X-Cache": "MISS" }))
+    await fetchApi("/proxy/repos/owner/repo")
+    const baseline = getLastGitHubFetchAt()
+
+    // Wait a tick so any new timestamp would differ
+    await new Promise((r) => setTimeout(r, 5))
+
+    // HIT should not change the timestamp
+    vi.stubGlobal("fetch", mockFetch(200, {}, true, { "X-Cache": "HIT" }))
+    await fetchApi("/proxy/repos/owner/repo")
+    expect(getLastGitHubFetchAt()).toBe(baseline)
+  })
+
+  it("does not update when no X-Cache header is present", async () => {
+    vi.stubGlobal("fetch", mockFetch(200, {}, true, { "X-Cache": "MISS" }))
+    await fetchApi("/proxy/repos/owner/repo")
+    const baseline = getLastGitHubFetchAt()
+
+    await new Promise((r) => setTimeout(r, 5))
+
+    // No X-Cache header (e.g. /auth/config)
+    vi.stubGlobal("fetch", mockFetch(200, {}))
+    await fetchApi("/auth/config")
+    expect(getLastGitHubFetchAt()).toBe(baseline)
+  })
+
+  it("updates on X-Cache: MISS from fetchApiText", async () => {
+    const before = Date.now()
+    vi.stubGlobal("fetch", mockFetch(200, "log data", true, { "X-Cache": "MISS" }))
+    await fetchApiText("/proxy/repos/owner/repo/actions/jobs/1/logs")
+    const ts = getLastGitHubFetchAt()
+    expect(ts).toBeGreaterThanOrEqual(before)
+  })
+
+  it("notifies subscribers on cache miss", async () => {
+    const listener = vi.fn()
+    const unsub = subscribeLastGitHubFetchAt(listener)
+
+    vi.stubGlobal("fetch", mockFetch(200, {}, true, { "X-Cache": "MISS" }))
+    await fetchApi("/proxy/repos/owner/repo")
+    expect(listener).toHaveBeenCalledOnce()
+
+    // HIT should not notify
+    listener.mockClear()
+    vi.stubGlobal("fetch", mockFetch(200, {}, true, { "X-Cache": "HIT" }))
+    await fetchApi("/proxy/repos/owner/repo")
+    expect(listener).not.toHaveBeenCalled()
+
+    unsub()
+  })
+
+  it("unsubscribe stops notifications", async () => {
+    const listener = vi.fn()
+    const unsub = subscribeLastGitHubFetchAt(listener)
+    unsub()
+
+    vi.stubGlobal("fetch", mockFetch(200, {}, true, { "X-Cache": "MISS" }))
+    await fetchApi("/proxy/repos/owner/repo")
+    expect(listener).not.toHaveBeenCalled()
   })
 })

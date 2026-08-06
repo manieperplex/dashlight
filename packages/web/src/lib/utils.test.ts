@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import {
   formatDuration,
   formatRelativeTime,
+  formatRelativeTimeShort,
   formatDateTime,
   runStatusVariant,
   runStatusLabel,
@@ -93,6 +94,38 @@ describe("formatRelativeTime", () => {
     vi.setSystemTime(new Date("2024-03-01T00:00:00Z"))
     const result = formatRelativeTime("2024-01-01T00:00:00Z")
     expect(result).toMatch(/Jan/)
+  })
+})
+
+// ── formatRelativeTimeShort ───────────────────────────────────────────────────
+
+describe("formatRelativeTimeShort", () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it("returns seconds for <60s", () => {
+    vi.setSystemTime(new Date("2024-01-01T00:00:30Z"))
+    expect(formatRelativeTimeShort(new Date("2024-01-01T00:00:00Z").getTime())).toBe("30s ago")
+  })
+
+  it("returns at least 1s", () => {
+    vi.setSystemTime(new Date("2024-01-01T00:00:00Z"))
+    expect(formatRelativeTimeShort(Date.now())).toBe("1s ago")
+  })
+
+  it("returns minutes for <60m", () => {
+    vi.setSystemTime(new Date("2024-01-01T00:05:00Z"))
+    expect(formatRelativeTimeShort(new Date("2024-01-01T00:00:00Z").getTime())).toBe("5m ago")
+  })
+
+  it("returns hours for <24h", () => {
+    vi.setSystemTime(new Date("2024-01-01T03:00:00Z"))
+    expect(formatRelativeTimeShort(new Date("2024-01-01T00:00:00Z").getTime())).toBe("3h ago")
+  })
+
+  it("returns days for >=24h", () => {
+    vi.setSystemTime(new Date("2024-01-03T00:00:00Z"))
+    expect(formatRelativeTimeShort(new Date("2024-01-01T00:00:00Z").getTime())).toBe("2d ago")
   })
 })
 

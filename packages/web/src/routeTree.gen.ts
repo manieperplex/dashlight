@@ -9,23 +9,23 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppRunsRouteImport } from './routes/_app/runs'
 import { Route as AppRepositoriesRouteImport } from './routes/_app/repositories'
+import { Route as AppRunsRouteImport } from './routes/_app/runs'
 import { Route as AppRepositoriesOwnerRepoRouteImport } from './routes/_app/repositories.$owner.$repo'
-import { Route as AppRunsOwnerRepoRunIdRouteImport } from './routes/_app/runs_.$owner.$repo.$runId'
 import { Route as AppRepositoriesOwnerRepoRunsRouteImport } from './routes/_app/repositories.$owner.$repo.runs'
+import { Route as AppRunsOwnerRepoRunIdRouteImport } from './routes/_app/runs_.$owner.$repo.$runId'
 import { Route as AppRepositoriesOwnerRepoRunsRunIdRouteImport } from './routes/_app/repositories.$owner.$repo.runs.$runId'
 
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -33,14 +33,14 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppRunsRoute = AppRunsRouteImport.update({
-  id: '/runs',
-  path: '/runs',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppRepositoriesRoute = AppRepositoriesRouteImport.update({
   id: '/repositories',
   path: '/repositories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRunsRoute = AppRunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
   getParentRoute: () => AppRoute,
 } as any)
 const AppRepositoriesOwnerRepoRoute =
@@ -49,17 +49,17 @@ const AppRepositoriesOwnerRepoRoute =
     path: '/$owner/$repo',
     getParentRoute: () => AppRepositoriesRoute,
   } as any)
-const AppRunsOwnerRepoRunIdRoute = AppRunsOwnerRepoRunIdRouteImport.update({
-  id: '/runs_/$owner/$repo/$runId',
-  path: '/runs/$owner/$repo/$runId',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppRepositoriesOwnerRepoRunsRoute =
   AppRepositoriesOwnerRepoRunsRouteImport.update({
     id: '/runs',
     path: '/runs',
     getParentRoute: () => AppRepositoriesOwnerRepoRoute,
   } as any)
+const AppRunsOwnerRepoRunIdRoute = AppRunsOwnerRepoRunIdRouteImport.update({
+  id: '/runs_/$owner/$repo/$runId',
+  path: '/runs/$owner/$repo/$runId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRepositoriesOwnerRepoRunsRunIdRoute =
   AppRepositoriesOwnerRepoRunsRunIdRouteImport.update({
     id: '/$runId',
@@ -140,18 +140,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app': {
       id: '/_app'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -161,18 +161,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/runs': {
-      id: '/_app/runs'
-      path: '/runs'
-      fullPath: '/runs'
-      preLoaderRoute: typeof AppRunsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/repositories': {
       id: '/_app/repositories'
       path: '/repositories'
       fullPath: '/repositories'
       preLoaderRoute: typeof AppRepositoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/runs': {
+      id: '/_app/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof AppRunsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/repositories/$owner/$repo': {
@@ -182,19 +182,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRepositoriesOwnerRepoRouteImport
       parentRoute: typeof AppRepositoriesRoute
     }
-    '/_app/runs_/$owner/$repo/$runId': {
-      id: '/_app/runs_/$owner/$repo/$runId'
-      path: '/runs/$owner/$repo/$runId'
-      fullPath: '/runs/$owner/$repo/$runId'
-      preLoaderRoute: typeof AppRunsOwnerRepoRunIdRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/repositories/$owner/$repo/runs': {
       id: '/_app/repositories/$owner/$repo/runs'
       path: '/runs'
       fullPath: '/repositories/$owner/$repo/runs'
       preLoaderRoute: typeof AppRepositoriesOwnerRepoRunsRouteImport
       parentRoute: typeof AppRepositoriesOwnerRepoRoute
+    }
+    '/_app/runs_/$owner/$repo/$runId': {
+      id: '/_app/runs_/$owner/$repo/$runId'
+      path: '/runs/$owner/$repo/$runId'
+      fullPath: '/runs/$owner/$repo/$runId'
+      preLoaderRoute: typeof AppRunsOwnerRepoRunIdRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/repositories/$owner/$repo/runs/$runId': {
       id: '/_app/repositories/$owner/$repo/runs/$runId'

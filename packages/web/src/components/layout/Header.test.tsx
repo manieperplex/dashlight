@@ -22,6 +22,18 @@ vi.mock("../../context/ThemeContext.js", () => ({
   useTheme: vi.fn(),
 }))
 
+const { mockUseLastFetchTime } = vi.hoisted(() => ({
+  mockUseLastFetchTime: vi.fn(() => ({
+    lastFetchTime: null as number | null,
+    lastSyncTime: null as number | null,
+    recordSync: vi.fn(),
+  })),
+}))
+
+vi.mock("../../lib/useLastFetchTime.js", () => ({
+  useLastFetchTime: mockUseLastFetchTime,
+}))
+
 vi.mock("../ui/Button.js", () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Button: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
@@ -171,5 +183,37 @@ describe("authConfig not yet loaded (undefined)", () => {
   it("does not show Token badge", () => {
     render(<Header user={user} />)
     expect(screen.queryByText("Token")).toBeNull()
+  })
+})
+
+// ── Last fetch / sync display ────────────────────────────────────────────────
+
+describe("last fetch time display", () => {
+  it("shows nothing when no fetch has occurred", () => {
+    render(<Header user={user} />)
+    expect(screen.queryByText(/Updated/)).toBeNull()
+    expect(screen.queryByText(/Synced/)).toBeNull()
+  })
+
+  it("shows 'Updated' when lastFetchTime is set", () => {
+    mockUseLastFetchTime.mockReturnValue({
+      lastFetchTime: Date.now() - 30_000,
+      lastSyncTime: null,
+      recordSync: vi.fn(),
+    })
+    render(<Header user={user} />)
+    expect(screen.getByText(/Updated 30s ago/)).toBeInTheDocument()
+    expect(screen.queryByText(/Synced/)).toBeNull()
+  })
+
+  it("shows both 'Updated' and 'Synced' when both are set", () => {
+    mockUseLastFetchTime.mockReturnValue({
+      lastFetchTime: Date.now() - 30_000,
+      lastSyncTime: Date.now() - 120_000,
+      recordSync: vi.fn(),
+    })
+    render(<Header user={user} />)
+    expect(screen.getByText(/Updated 30s ago/)).toBeInTheDocument()
+    expect(screen.getByText(/Synced 2m ago/)).toBeInTheDocument()
   })
 })

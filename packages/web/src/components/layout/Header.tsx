@@ -4,18 +4,20 @@ import { logout, clearServerCache, getAuthConfig } from "../../api/index.js"
 import { Button } from "../ui/Button.js"
 import { Spinner } from "../ui/Spinner.js"
 import { useTheme } from "../../context/ThemeContext.js"
+import { useLastFetchTime } from "../../lib/useLastFetchTime.js"
+import { formatRelativeTimeShort } from "../../lib/utils.js"
 import type { SessionUser } from "../../types/index.js"
 
 interface HeaderProps {
   user: SessionUser
-  lastUpdated?: number | null
 }
 
-export function Header({ user, lastUpdated }: HeaderProps) {
+export function Header({ user }: HeaderProps) {
   const isFetching = useIsFetching()
   const queryClient = useQueryClient()
   const [syncing, setSyncing] = useState(false)
   const { theme, toggleTheme } = useTheme()
+  const { lastFetchTime, lastSyncTime, recordSync } = useLastFetchTime()
 
   const { data: authConfig } = useQuery({
     queryKey: ["auth", "config"],
@@ -39,6 +41,7 @@ export function Header({ user, lastUpdated }: HeaderProps) {
     try {
       await clearServerCache()
       await queryClient.invalidateQueries()
+      recordSync()
     } finally {
       setSyncing(false)
     }
@@ -51,9 +54,10 @@ export function Header({ user, lastUpdated }: HeaderProps) {
           <span className="flex-center gap-1 text-muted text-small">
             <Spinner /> {syncing ? "Syncing…" : "Refreshing…"}
           </span>
-        ) : lastUpdated ? (
+        ) : lastFetchTime ? (
           <span className="text-muted text-small">
-            Updated {new Date(lastUpdated).toLocaleTimeString(undefined, { timeStyle: "short" })}
+            Updated {formatRelativeTimeShort(lastFetchTime)}
+            {lastSyncTime && <> · Synced {formatRelativeTimeShort(lastSyncTime)}</>}
           </span>
         ) : null}
       </div>
