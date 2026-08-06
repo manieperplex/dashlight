@@ -41,6 +41,16 @@ export function formatDateTime(dateStr: string | null): string {
   })
 }
 
+export function formatRelativeTimeShort(timestamp: number): string {
+  const diffSec = Math.floor((Date.now() - timestamp) / 1000)
+  if (diffSec < 60) return `${Math.max(diffSec, 1)}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHour = Math.floor(diffMin / 60)
+  if (diffHour < 24) return `${diffHour}h ago`
+  return `${Math.floor(diffHour / 24)}d ago`
+}
+
 // ── Status helpers ────────────────────────────────────────────────────────────
 
 export type StatusVariant = "success" | "failure" | "running" | "pending" | "cancelled" | "neutral"
