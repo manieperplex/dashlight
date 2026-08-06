@@ -1,3 +1,21 @@
+// Tracks when the server last fetched fresh data from GitHub (X-Cache: MISS).
+let _lastGitHubFetchAt: number | null = null
+const _listeners = new Set<() => void>()
+
+export function getLastGitHubFetchAt(): number | null {
+  return _lastGitHubFetchAt
+}
+
+export function subscribeLastGitHubFetchAt(listener: () => void): () => void {
+  _listeners.add(listener)
+  return () => _listeners.delete(listener)
+}
+
+function recordCacheMiss(): void {
+  _lastGitHubFetchAt = Date.now()
+  for (const listener of _listeners) listener()
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -36,6 +54,10 @@ export async function fetchApi<T>(
     throw new ApiError(message, res.status, body)
   }
 
+  if (res.headers.get("X-Cache") === "MISS") {
+    recordCacheMiss()
+  }
+
   if (res.status === 204) {
     return null as unknown as T
   }
@@ -49,5 +71,8 @@ export async function fetchApiText(path: string, options?: RequestInit): Promise
     credentials: "include",
   })
   if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status)
+  if (res.headers.get("X-Cache") === "MISS") {
+    recordCacheMiss()
+  }
   return res.text()
 }
