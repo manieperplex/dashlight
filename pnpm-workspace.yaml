@@ -2,8 +2,8 @@ packages:
   - 'packages/*'
 
 catalog:
-  typescript: "^6.0.3"
-  eslint: "^10.5.0"
-  typescript-eslint: "^8.62.0"
-  vitest: "^4.1.9"
-  "@vitest/coverage-v8": "^4.1.9"
+  typescript: "^7.0.2"
+  eslint: "^10.8.1"
+  typescript-eslint: "^8.67.0"
+  vitest: "^4.1.11"
+  "@vitest/coverage-v8": "^4.1.11"
