@@ -120,12 +120,15 @@ function AllRuns() {
 
   const repoList = reposResult?.repos ?? []
 
+  // Fetch more runs when filtering so client-side search has better coverage
+  const perPage = filter ? 100 : 25
+
   const runResults = useQueries({
     queries: repoList.map((r) => {
       const [owner, name] = r.fullName.split("/")
       return {
-        queryKey: ["runs", r.fullName, "all-runs"] as const,
-        queryFn: () => getRuns(owner!, name!, { per_page: 25 }),
+        queryKey: ["runs", r.fullName, "all-runs", perPage] as const,
+        queryFn: () => getRuns(owner!, name!, { per_page: perPage }),
         staleTime: 30 * 1000,
         refetchInterval: 30_000,
         enabled: !!owner && !!name,
@@ -144,13 +147,15 @@ function AllRuns() {
     }))
   })
 
+  // Sum of GitHub's total_count across all repos (actual total, not just loaded)
+  const totalAcrossRepos = runResults.reduce((sum, r) => sum + (r.data?.total ?? 0), 0)
   const sortedRuns = mergeAndSortRuns(perRepo)
   const visibleRuns = filter ? filterRuns(sortedRuns, filter) : sortedRuns
   const isFiltered = filter.length > 0
 
   const title = isFiltered
-    ? `All Runs (${visibleRuns.length} of ${sortedRuns.length})`
-    : `All Runs (${sortedRuns.length})`
+    ? `Recent Runs (${visibleRuns.length} of ${sortedRuns.length} loaded)`
+    : `Recent Runs (${sortedRuns.length} of ${totalAcrossRepos.toLocaleString()})`
 
   function setFilter(value: string) {
     void navigate({ search: value ? { filter: value } : {} })
@@ -176,6 +181,11 @@ function AllRuns() {
               color: "var(--color-text)",
             }}
           />
+          {isFiltered && (
+            <span className="text-muted text-small" style={{ display: "block", marginTop: "0.375rem" }}>
+              Filtering {sortedRuns.length} loaded runs — older runs are not searched
+            </span>
+          )}
         </div>
         {visibleRuns.length === 0 ? (
           <p className="empty-state">
