@@ -2,7 +2,7 @@ import { useState } from "react"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
-import { getRuns } from "../../api/index.js"
+import { getRuns, getWorkflowRuns } from "../../api/index.js"
 import type { WorkflowRun } from "../../types/index.js"
 import { StatusBadge } from "../../components/ui/Badge.js"
 import { Button } from "../../components/ui/Button.js"
@@ -12,6 +12,7 @@ import { formatRelativeTime, formatDuration, formatDateTime } from "../../lib/ut
 
 const searchSchema = z.object({
   q: z.string().optional(),
+  workflowId: z.number().optional(),
   page: z.number().optional().default(1),
 })
 
@@ -107,7 +108,7 @@ export function filterRuns(runs: WorkflowRun[], q: string): WorkflowRun[] {
 
 export function RunsList() {
   const { owner, repo } = Route.useParams()
-  const { q, page } = Route.useSearch()
+  const { q, workflowId, page } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
   const [sortKey, setSortKey] = useState<SortKey>("started")
@@ -122,22 +123,33 @@ export function RunsList() {
     }
   }
 
-  // When a filter is active, fetch a larger batch so the client-side filter
-  // has enough history. Pagination is suppressed in this mode.
-  const perPage = q ? 100 : 30
+  const perPage = 30
 
+  // When workflowId is present, fetch from the scoped endpoint with pagination.
+  // Otherwise fall back to repo-wide runs (legacy q filter uses a larger batch).
   const { data, isLoading } = useQuery({
-    queryKey: ["runs", `${owner}/${repo}`, { page: q ? 1 : page, perPage }],
-    queryFn: () => getRuns(owner, repo, { page: q ? 1 : page, per_page: perPage }),
+    queryKey: workflowId
+      ? ["workflow-runs", `${owner}/${repo}`, workflowId, { page, perPage }]
+      : ["runs", `${owner}/${repo}`, { page: q ? 1 : page, perPage: q ? 100 : perPage }],
+    queryFn: () =>
+      workflowId
+        ? getWorkflowRuns(owner, repo, workflowId, { page, per_page: perPage })
+        : getRuns(owner, repo, { page: q ? 1 : page, per_page: q ? 100 : perPage }),
     refetchInterval: 30_000,
   })
 
   const allRuns = data?.runs ?? []
+  // q is a client-side text filter applied on top of whichever endpoint was used
   const runs = sortRuns(filterRuns(allRuns, q ?? ""), sortKey, sortDir)
-  const totalPages = q ? 0 : Math.ceil((data?.total ?? 0) / 30)
+  // Pagination: available when using a scoped endpoint or repo-wide without q
+  const totalPages = (workflowId || !q) ? Math.ceil((data?.total ?? 0) / perPage) : 0
 
   function setQ(value: string) {
     void navigate({ search: (prev) => ({ ...prev, q: value || undefined, page: 1 }) })
+  }
+
+  function clearWorkflowScope() {
+    void navigate({ search: (prev) => ({ ...prev, workflowId: undefined, page: 1 }) })
   }
 
   if (isLoading) return <PageSpinner />
@@ -171,7 +183,7 @@ export function RunsList() {
         </div>
       </div>
 
-      <div style={{ marginBottom: "1rem" }}>
+      <div style={{ marginBottom: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         <input
           type="text"
           placeholder="Search here..."
@@ -184,6 +196,25 @@ export function RunsList() {
             color: "var(--color-text)", fontSize: 13,
           }}
         />
+        {workflowId && (
+          <div className="flex-center gap-2 text-small">
+            <span className="badge badge-neutral">Workflow #{workflowId}</span>
+            {q && <span className="text-muted">Filtering loaded results</span>}
+            <button
+              className="text-muted"
+              onClick={clearWorkflowScope}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                textDecoration: "underline", fontSize: "inherit", color: "inherit", padding: 0,
+              }}
+            >
+              Show all workflows
+            </button>
+          </div>
+        )}
+        {!workflowId && q && (
+          <span className="text-muted text-small">Filtering loaded results</span>
+        )}
       </div>
 
       <div className="card">

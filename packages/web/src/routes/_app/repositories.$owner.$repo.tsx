@@ -175,7 +175,7 @@ export function WorkflowsCard({ owner, repo }: { owner: string; repo: string }) 
                       <Link
                         to="/repositories/$owner/$repo/runs"
                         params={{ owner, repo }}
-                        search={{ q: w.name }}
+                        search={{ workflowId: w.id }}
                       >
                         {w.name}
                       </Link>
