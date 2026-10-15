@@ -70,7 +70,7 @@ describe("WorkflowHealthSection", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it("returns nothing when cards is empty", () => {
+  it("returns nothing when cards is empty and no unresolved names", () => {
     const { container } = render(
       <WorkflowHealthSection watchWorkflows={["publish"]} cards={[]} />
     )
@@ -296,6 +296,44 @@ describe("WorkflowHealthSection", () => {
     )
     expect(container.querySelectorAll(".latest-run-card")).toHaveLength(1)
     expect(screen.getByText("No runs yet")).toBeInTheDocument()
+  })
+
+  // ── Unresolved watch names ──────────────────────────────────────────────────
+
+  it("shows diagnostic when cards is empty but unresolvedNames has entries", () => {
+    render(
+      <WorkflowHealthSection watchWorkflows={["Publish", "Scan"]} cards={[]} unresolvedNames={["Publish", "Scan"]} />
+    )
+    expect(screen.getByText("Workflow Health")).toBeInTheDocument()
+    expect(screen.getByText("Publish", { selector: "strong" })).toBeInTheDocument()
+    expect(screen.getByText("Scan", { selector: "strong" })).toBeInTheDocument()
+  })
+
+  it("shows unresolved names alongside resolved cards", () => {
+    const cards = [makeCard({ catalogName: "CI" })]
+    const { container } = render(
+      <WorkflowHealthSection watchWorkflows={["CI", "Publish"]} cards={cards} unresolvedNames={["Publish"]} />
+    )
+    // Card for CI is rendered
+    expect(container.querySelectorAll(".latest-run-card")).toHaveLength(1)
+    // Diagnostic for Publish is shown
+    expect(screen.getByText("Publish", { selector: "strong" })).toBeInTheDocument()
+  })
+
+  it("does not show diagnostic section when unresolvedNames is empty", () => {
+    const cards = [makeCard()]
+    const { container } = render(
+      <WorkflowHealthSection watchWorkflows={["publish"]} cards={cards} unresolvedNames={[]} />
+    )
+    expect(container.querySelector("[data-testid='unresolved-names']")).toBeNull()
+  })
+
+  it("does not show diagnostic section when unresolvedNames is undefined", () => {
+    const cards = [makeCard()]
+    const { container } = render(
+      <WorkflowHealthSection watchWorkflows={["publish"]} cards={cards} />
+    )
+    expect(container.querySelector("[data-testid='unresolved-names']")).toBeNull()
   })
 })
 

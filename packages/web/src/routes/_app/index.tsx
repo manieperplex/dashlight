@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_app/")({
 })
 
 function Dashboard() {
-  const { data: repos, isLoading } = useQuery({
+  const { data: reposResult, isLoading } = useQuery({
     queryKey: ["repos", "user"],
     queryFn: () => getRepos(),
     refetchInterval: 60_000,
@@ -29,7 +29,8 @@ function Dashboard() {
     staleTime: Infinity,
   })
 
-  const repoList = useMemo(() => repos ?? [], [repos])
+  const repoList = useMemo(() => reposResult?.repos ?? [], [reposResult?.repos])
+  const repoErrors = reposResult?.errors ?? []
   const watchWorkflows = useMemo(() => appConfig?.watchWorkflows ?? [], [appConfig?.watchWorkflows])
 
   // Fetch repo-wide runs for HealthTable, ActivityCard, BuildTrends
@@ -81,6 +82,13 @@ function Dashboard() {
     }),
   })
 
+  // Identify watch names that matched zero catalog entries across all repos
+  const unresolvedNames = useMemo(() => {
+    if (watchWorkflows.length === 0) return []
+    const resolvedSet = new Set(resolvedMatches.map((m) => m.catalogName.toLowerCase()))
+    return watchWorkflows.filter((name) => !resolvedSet.has(name.toLowerCase()))
+  }, [watchWorkflows, resolvedMatches])
+
   if (isLoading) return <PageSpinner />
 
   const repoRuns: RepoRunEntry[] = repoList.map((repo, i) => ({
@@ -100,7 +108,22 @@ function Dashboard() {
   return (
     <div>
       <div className="stack">
-        <WorkflowHealthSection watchWorkflows={watchWorkflows} cards={healthCards} />
+        {repoErrors.length > 0 && (
+          <Card>
+            <div className="card-header">
+              <span className="card-title">Configuration Issues</span>
+            </div>
+            <div className="text-small" style={{ padding: "0 0.75rem 0.75rem" }} data-testid="repo-errors">
+              {repoErrors.map(({ repo, reason }) => (
+                <div key={repo} style={{ padding: "0.25rem 0" }}>
+                  <strong>{repo}</strong>
+                  <span className="text-muted"> — {reason}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+        <WorkflowHealthSection watchWorkflows={watchWorkflows} cards={healthCards} unresolvedNames={unresolvedNames} />
         <ActivityCard repoRuns={repoRuns} repos={repoList} />
         <HealthTable repoRuns={repoRuns} repos={repoList} />
         <BuildTrendsCard repoRuns={repoRuns} repos={repoList} />

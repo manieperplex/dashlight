@@ -20,12 +20,13 @@ function Repositories() {
 
   const [filter, setFilter] = useState("")
 
-  const { data: repos, isLoading } = useQuery({
+  const { data: reposResult, isLoading } = useQuery({
     queryKey: ["repos", "user"],
     queryFn: () => getRepos(),
     staleTime: 15 * 60 * 1000,
     enabled: !hasChild,
   })
+  const repos = reposResult?.repos
 
   if (hasChild) return <Outlet />
   if (isLoading) return <PageSpinner />

@@ -112,13 +112,13 @@ function AllRuns() {
   const { filter = "" } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
-  const { data: repos, isLoading: reposLoading } = useQuery({
+  const { data: reposResult, isLoading: reposLoading } = useQuery({
     queryKey: ["repos", "user"],
     queryFn: () => getRepos(),
     staleTime: 15 * 60 * 1000,
   })
 
-  const repoList = repos ?? []
+  const repoList = reposResult?.repos ?? []
 
   const runResults = useQueries({
     queries: repoList.map((r) => {

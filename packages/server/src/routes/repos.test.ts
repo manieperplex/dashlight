@@ -142,7 +142,7 @@ describe("fetchAllPages", () => {
 // ── Default mode (no env vars) ────────────────────────────────────────────────
 
 describe("GET /api/repos — default mode (no env vars)", () => {
-  it("fetches /user/repos with pagination and returns data", async () => {
+  it("fetches /user/repos with pagination and returns { repos, errors }", async () => {
     const data = [repoData("owner/repo1"), repoData("owner/repo2")]
     mockGithubFetch.mockResolvedValueOnce(githubResult(data))
 
@@ -150,19 +150,21 @@ describe("GET /api/repos — default mode (no env vars)", () => {
 
     expect(res.status).toBe(200)
     expect(mockGithubFetch).toHaveBeenCalledWith("tok", expect.stringContaining("/user/repos"))
-    expect(await res.json()).toEqual(data)
+    const body = await res.json() as { repos: unknown[]; errors: unknown[] }
+    expect(body.repos).toEqual(data)
+    expect(body.errors).toEqual([])
   })
 
   it("returns cached data with X-Cache: HIT", async () => {
-    const data = [repoData("owner/repo1")]
-    mockCacheGet.mockReturnValueOnce(data)
+    const cached = { repos: [repoData("owner/repo1")], errors: [] }
+    mockCacheGet.mockReturnValueOnce(cached)
 
     const res = await makeApp().request("/api/repos")
 
     expect(res.status).toBe(200)
     expect(res.headers.get("X-Cache")).toBe("HIT")
     expect(mockGithubFetch).not.toHaveBeenCalled()
-    expect(await res.json()).toEqual(data)
+    expect(await res.json()).toEqual(cached)
   })
 
   it("sets cache after a successful fetch", async () => {
@@ -171,7 +173,11 @@ describe("GET /api/repos — default mode (no env vars)", () => {
 
     await makeApp().request("/api/repos")
 
-    expect(mockCacheSet).toHaveBeenCalledWith(expect.any(String), data, expect.any(Number))
+    expect(mockCacheSet).toHaveBeenCalledWith(
+      expect.any(String),
+      { repos: data, errors: [] },
+      expect.any(Number),
+    )
   })
 
   it("paginates through all user repos", async () => {
@@ -184,8 +190,8 @@ describe("GET /api/repos — default mode (no env vars)", () => {
     const res = await makeApp().request("/api/repos")
 
     expect(res.status).toBe(200)
-    const body = await res.json() as unknown[]
-    expect(body).toHaveLength(120)
+    const body = await res.json() as { repos: unknown[] }
+    expect(body.repos).toHaveLength(120)
     expect(mockGithubFetch).toHaveBeenCalledTimes(2)
   })
 })
@@ -195,7 +201,7 @@ describe("GET /api/repos — default mode (no env vars)", () => {
 describe("GET /api/repos — GITHUB_ORG mode", () => {
   beforeEach(() => { process.env["GITHUB_ORG"] = "myorg" })
 
-  it("fetches /orgs/myorg/repos with pagination and returns data", async () => {
+  it("fetches /orgs/myorg/repos with pagination and returns { repos, errors }", async () => {
     const data = [repoData("myorg/alpha"), repoData("myorg/beta")]
     mockGithubFetch.mockResolvedValueOnce(githubResult(data))
 
@@ -206,12 +212,14 @@ describe("GET /api/repos — GITHUB_ORG mode", () => {
       "tok",
       expect.stringContaining("/orgs/myorg/repos"),
     )
-    expect(await res.json()).toEqual(data)
+    const body = await res.json() as { repos: unknown[]; errors: unknown[] }
+    expect(body.repos).toEqual(data)
+    expect(body.errors).toEqual([])
   })
 
   it("returns cached data with X-Cache: HIT", async () => {
-    const data = [repoData("myorg/alpha")]
-    mockCacheGet.mockReturnValueOnce(data)
+    const cached = { repos: [repoData("myorg/alpha")], errors: [] }
+    mockCacheGet.mockReturnValueOnce(cached)
 
     const res = await makeApp().request("/api/repos")
 
@@ -243,8 +251,8 @@ describe("GET /api/repos — GITHUB_ORG mode", () => {
     const res = await makeApp().request("/api/repos")
 
     expect(res.status).toBe(200)
-    const body = await res.json() as unknown[]
-    expect(body).toHaveLength(250)
+    const body = await res.json() as { repos: unknown[] }
+    expect(body.repos).toHaveLength(250)
     expect(mockGithubFetch).toHaveBeenCalledTimes(3)
   })
 })
@@ -254,7 +262,7 @@ describe("GET /api/repos — GITHUB_ORG mode", () => {
 describe("GET /api/repos — GITHUB_REPOS mode", () => {
   beforeEach(() => { process.env["GITHUB_REPOS"] = "owner/repo1,owner/repo2" })
 
-  it("fetches each repo individually and returns all results", async () => {
+  it("fetches each repo individually and returns { repos, errors }", async () => {
     const repo1 = repoData("owner/repo1")
     const repo2 = repoData("owner/repo2")
     mockGithubFetch
@@ -265,13 +273,12 @@ describe("GET /api/repos — GITHUB_REPOS mode", () => {
 
     expect(res.status).toBe(200)
     expect(mockGithubFetch).toHaveBeenCalledTimes(2)
-    expect(mockGithubFetch).toHaveBeenCalledWith("tok", "/repos/owner/repo1")
-    expect(mockGithubFetch).toHaveBeenCalledWith("tok", "/repos/owner/repo2")
-    const body = await res.json() as unknown[]
-    expect(body).toHaveLength(2)
+    const body = await res.json() as { repos: unknown[]; errors: unknown[] }
+    expect(body.repos).toHaveLength(2)
+    expect(body.errors).toEqual([])
   })
 
-  it("returns only successful repos when one fetch fails", async () => {
+  it("returns successful repos and error details when one fetch fails", async () => {
     const repo1 = repoData("owner/repo1")
     mockGithubFetch
       .mockResolvedValueOnce(githubResult(repo1))
@@ -280,14 +287,29 @@ describe("GET /api/repos — GITHUB_REPOS mode", () => {
     const res = await makeApp().request("/api/repos")
 
     expect(res.status).toBe(200)
-    const body = await res.json() as unknown[]
-    expect(body).toHaveLength(1)
-    expect(body[0]).toEqual(repo1)
+    const body = await res.json() as { repos: unknown[]; errors: Array<{ repo: string; reason: string }> }
+    expect(body.repos).toHaveLength(1)
+    expect(body.repos[0]).toEqual(repo1)
+    expect(body.errors).toHaveLength(1)
+    expect(body.errors[0].repo).toBe("owner/repo2")
+    expect(body.errors[0].reason).toBe("Not found or insufficient permissions")
+  })
+
+  it("returns API error reason for non-404 failures", async () => {
+    mockGithubFetch
+      .mockResolvedValueOnce(githubResult(repoData("owner/repo1")))
+      .mockRejectedValueOnce(new GitHubApiError("Forbidden", 403))
+
+    const res = await makeApp().request("/api/repos")
+
+    const body = await res.json() as { errors: Array<{ repo: string; reason: string }> }
+    expect(body.errors).toHaveLength(1)
+    expect(body.errors[0].reason).toBe("GitHub API error 403: Forbidden")
   })
 
   it("returns cached data with X-Cache: HIT", async () => {
-    const data = [repoData("owner/repo1"), repoData("owner/repo2")]
-    mockCacheGet.mockReturnValueOnce(data)
+    const cached = { repos: [repoData("owner/repo1"), repoData("owner/repo2")], errors: [] }
+    mockCacheGet.mockReturnValueOnce(cached)
 
     const res = await makeApp().request("/api/repos")
 

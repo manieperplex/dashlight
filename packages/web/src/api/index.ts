@@ -5,6 +5,7 @@ import type {
   AppConfig,
   Organization,
   Repository,
+  RepoFetchError,
   Workflow,
   WorkflowRun,
   WorkflowJob,
@@ -199,9 +200,12 @@ export async function getOrgs(): Promise<Organization[]> {
  *   GITHUB_ORG=myorg           → all org repos
  *   (neither)                  → authenticated user's repos
  */
-export async function getRepos(): Promise<Repository[]> {
-  const repos = await fetchApi<GHRepo[]>("/api/repos")
-  return repos.map(normalizeRepo)
+export async function getRepos(): Promise<{ repos: Repository[]; errors: RepoFetchError[] }> {
+  const raw = await fetchApi<{ repos: GHRepo[]; errors: RepoFetchError[] }>("/api/repos")
+  return {
+    repos: raw.repos.map(normalizeRepo),
+    errors: raw.errors,
+  }
 }
 
 export async function getUserRepos(page = 1): Promise<Repository[]> {

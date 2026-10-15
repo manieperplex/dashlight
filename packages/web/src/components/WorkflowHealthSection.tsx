@@ -17,6 +17,8 @@ export interface WatchedWorkflowCard {
 interface WorkflowHealthSectionProps {
   watchWorkflows: string[]
   cards: WatchedWorkflowCard[]
+  /** Watch names that matched zero catalog entries across all repos. */
+  unresolvedNames?: string[]
 }
 
 // ── Run dot ───────────────────────────────────────────────────────────────────
@@ -200,9 +202,13 @@ function CommitIcon() {
 
 // ── Section ───────────────────────────────────────────────────────────────────
 
-export function WorkflowHealthSection({ watchWorkflows, cards }: WorkflowHealthSectionProps) {
+export function WorkflowHealthSection({ watchWorkflows, cards, unresolvedNames }: WorkflowHealthSectionProps) {
   if (watchWorkflows.length === 0) return null
-  if (cards.length === 0) return null
+
+  const hasUnresolved = unresolvedNames && unresolvedNames.length > 0
+
+  // Nothing to show at all — no cards and no diagnostics
+  if (cards.length === 0 && !hasUnresolved) return null
 
   // Detect repo short-names that appear under more than one distinct owner
   const repoOwnerMap = new Map<string, Set<string>>()
@@ -225,15 +231,24 @@ export function WorkflowHealthSection({ watchWorkflows, cards }: WorkflowHealthS
         <span className="card-title">Workflow Health</span>
         <TruncatingTitle items={watchWorkflows} className="text-muted text-small" />
       </div>
-      <div className="latest-runs-grid">
-        {cards.map((card) => (
-          <HealthRunCard
-            key={`${card.fullName}/${card.workflowId}`}
-            card={card}
-            duplicateRepoNames={duplicateRepoNames}
-          />
-        ))}
-      </div>
+      {cards.length > 0 && (
+        <div className="latest-runs-grid">
+          {cards.map((card) => (
+            <HealthRunCard
+              key={`${card.fullName}/${card.workflowId}`}
+              card={card}
+              duplicateRepoNames={duplicateRepoNames}
+            />
+          ))}
+        </div>
+      )}
+      {hasUnresolved && (
+        <div className="text-muted text-small" style={{ padding: "0.5rem 0.75rem" }} data-testid="unresolved-names">
+          {unresolvedNames.map((name) => (
+            <div key={name}>No matching workflow found for <strong>{name}</strong></div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }

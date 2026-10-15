@@ -89,14 +89,14 @@ describe("Repositories list", () => {
   })
 
   it("shows empty state when no repos", () => {
-    vi.mocked(useQuery).mockReturnValue({ data: [], isLoading: false } as never)
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [], errors: [] }, isLoading: false } as never)
     render(<Repositories />)
     expect(screen.getByText("No repositories found.")).toBeInTheDocument()
   })
 
   it("renders one row per repo", () => {
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: [makeRepo(), makeRepo({ id: 2, fullName: "acme/web", name: "web" })], isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos: [makeRepo(), makeRepo({ id: 2, fullName: "acme/web", name: "web" })], errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     const { container } = render(<Repositories />)
     expect(container.querySelectorAll("tbody tr")).toHaveLength(2)
@@ -104,7 +104,7 @@ describe("Repositories list", () => {
 
   it("renders owner in muted span and repo name as link", () => {
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: [makeRepo()], isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos: [makeRepo()], errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     const { container } = render(<Repositories />)
     expect(container.querySelector(".health-repo-label-owner")?.textContent).toBe("acme/")
@@ -114,7 +114,7 @@ describe("Repositories list", () => {
 
   it("repo name link does not include the owner prefix", () => {
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: [makeRepo()], isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos: [makeRepo()], errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     render(<Repositories />)
     expect(screen.getByRole("link", { name: "api" }).textContent).toBe("api")
@@ -122,7 +122,7 @@ describe("Repositories list", () => {
 
   it("shows language", () => {
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: [makeRepo({ language: "Go" })], isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos: [makeRepo({ language: "Go" })], errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     render(<Repositories />)
     expect(screen.getByText("Go")).toBeInTheDocument()
@@ -130,7 +130,7 @@ describe("Repositories list", () => {
 
   it("shows '—' when language is null", () => {
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: [makeRepo({ language: null })], isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos: [makeRepo({ language: null })], errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     render(<Repositories />)
     expect(screen.getByText("—")).toBeInTheDocument()
@@ -138,7 +138,7 @@ describe("Repositories list", () => {
 
   it("shows 'No runs' when there are no runs and actions are enabled", () => {
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: [makeRepo()], isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos: [makeRepo()], errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     render(<Repositories />)
     expect(screen.getByText("No runs")).toBeInTheDocument()
@@ -146,7 +146,7 @@ describe("Repositories list", () => {
 
   it("shows 'Actions not enabled' when actionsDisabled is true", () => {
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: [makeRepo()], isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos: [makeRepo()], errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: true }, isLoading: false } as never)
     render(<Repositories />)
     expect(screen.getByText("Actions not enabled")).toBeInTheDocument()
@@ -161,7 +161,7 @@ describe("Repositories list", () => {
       makeRepo({ id: 3, fullName: "acme/middle", name: "middle" }),
     ]
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: repos, isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos, errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     const { container } = render(<Repositories />)
     const links = container.querySelectorAll("tbody tr td a")
@@ -176,7 +176,7 @@ describe("Repositories list", () => {
       makeRepo({ id: 2, fullName: "org/bravo",   name: "bravo" }),
     ]
     vi.mocked(useQuery)
-      .mockReturnValueOnce({ data: repos, isLoading: false } as never)
+      .mockReturnValueOnce({ data: { repos, errors: [] }, isLoading: false } as never)
       .mockReturnValue({ data: { runs: [], actionsDisabled: false }, isLoading: false } as never)
     const { container } = render(<Repositories />)
     const links = container.querySelectorAll("tbody tr td a")
@@ -194,7 +194,7 @@ describe("Repositories list", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(useQuery).mockImplementation((options: any) => {
       if (options.queryKey[0] === "repos") {
-        return { data: repos, isLoading: false } as never
+        return { data: { repos, errors: [] }, isLoading: false } as never
       }
       return { data: { runs: [], actionsDisabled: false }, isLoading: false } as never
     })
