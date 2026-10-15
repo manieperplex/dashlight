@@ -253,12 +253,17 @@ function invalidateOnWrite(userId: string, path: string): void {
   const repoMatch = path.match(/^\/repos\/([^/]+\/[^/]+)/)
   if (repoMatch?.[1]) {
     const repoPath = repoMatch[1]
+    // Repo-wide runs and jobs
     cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/runs`)
     cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/jobs`)
-    cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/workflows`)
+    // Workflow-scoped runs: prefix "workflows/" matches scoped run keys
+    // (e.g. …/workflows/123/runs?…) but NOT the catalog (…/workflows?…)
+    cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/workflows/`)
     cacheInvalidate(userId, `score:${repoPath}`)
+    // Stale entries
     staleInvalidate(userId, `GET:/repos/${repoPath}/actions/runs`)
     staleInvalidate(userId, `GET:/repos/${repoPath}/actions/jobs`)
+    staleInvalidate(userId, `GET:/repos/${repoPath}/actions/workflows/`)
   }
 }
 
