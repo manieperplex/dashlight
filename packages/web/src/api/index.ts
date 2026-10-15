@@ -227,10 +227,22 @@ export async function getRepo(owner: string, repo: string): Promise<Repository> 
 
 export async function getWorkflows(owner: string, repo: string): Promise<Workflow[]> {
   try {
-    const res = await fetchApi<{ workflows: GHWorkflow[] }>(
-      `/proxy/repos/${owner}/${repo}/actions/workflows`
-    )
-    return res.workflows.map(normalizeWorkflow)
+    const allWorkflows: Workflow[] = []
+    let page = 1
+    const perPage = 100
+    let hasMore = true
+    while (hasMore) {
+      const res = await fetchApi<{ workflows: GHWorkflow[]; total_count: number }>(
+        `/proxy/repos/${owner}/${repo}/actions/workflows?per_page=${perPage}&page=${page}`
+      )
+      allWorkflows.push(...res.workflows.map(normalizeWorkflow))
+      if (res.workflows.length < perPage || allWorkflows.length >= res.total_count || page >= 10) {
+        hasMore = false
+      } else {
+        page++
+      }
+    }
+    return allWorkflows
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return []
     throw err
@@ -238,6 +250,31 @@ export async function getWorkflows(owner: string, repo: string): Promise<Workflo
 }
 
 // ── Workflow Runs ─────────────────────────────────────────────────────────────
+
+/**
+ * Fetch runs scoped to a specific workflow by its numeric ID.
+ * Maps to: GET /repos/{owner}/{repo}/actions/workflows/{workflowId}/runs
+ */
+export async function getWorkflowRuns(
+  owner: string,
+  repo: string,
+  workflowId: number,
+  params: { branch?: string; status?: string; per_page?: number; page?: number } = {}
+): Promise<{ runs: WorkflowRun[]; total: number }> {
+  const qs = new URLSearchParams()
+  if (params.branch) qs.set("branch", params.branch)
+  if (params.status) qs.set("status", params.status)
+  qs.set("per_page", String(params.per_page ?? 30))
+  qs.set("page", String(params.page ?? 1))
+
+  const res = await fetchApi<{ workflow_runs: GHRun[]; total_count: number }>(
+    `/proxy/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?${qs.toString()}`
+  )
+  return {
+    runs: res.workflow_runs.map(normalizeRun),
+    total: res.total_count,
+  }
+}
 
 export async function getRuns(
   owner: string,

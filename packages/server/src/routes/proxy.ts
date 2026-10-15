@@ -227,7 +227,10 @@ proxy.patch("/*", async (c) => {
 function resolveTtl(path: string): number {
   if (path.startsWith("/user/orgs")) return TTL.orgs
   if (path.startsWith("/user/repos") || path.match(/\/orgs\/[^/]+\/repos/)) return TTL.repos
-  if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/workflows($|\/[^/]+\/runs)/)) return TTL.workflows
+  // Workflow-scoped runs: /repos/{o}/{r}/actions/workflows/{id}/runs → runs TTL (2 min)
+  if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/workflows\/[^/]+\/runs/)) return TTL.runs
+  // Workflow catalog: /repos/{o}/{r}/actions/workflows → workflows TTL (10 min)
+  if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/workflows/)) return TTL.workflows
   if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/runs\/[^/]+\/jobs/)) return TTL.jobs
   if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/runs/)) return TTL.runs
   if (path.match(/\/repos\/[^/]+\/[^/]+\/check-runs/)) return TTL.annotations

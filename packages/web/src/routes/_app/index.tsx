@@ -1,14 +1,15 @@
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useQuery, useQueries } from "@tanstack/react-query"
-import { getRepos, getRuns, getAppConfig } from "../../api/index.js"
+import { getRepos, getRuns, getAppConfig, getWorkflows, getWorkflowRuns } from "../../api/index.js"
 import { PageSpinner } from "../../components/ui/Spinner.js"
 import { Card, CardHeader } from "../../components/ui/Card.js"
 import { RepoActivityChart, BuildTrendChart } from "../../components/charts/RunCharts.js"
 import type { RepoRunEntry } from "../../components/charts/RunCharts.js"
 import { SuccessSquares } from "../../components/ui/SuccessSquares.js"
 import { formatRelativeTime, computeRunSummary, formatDuration, runStatusVariant, VARIANT_COLOR } from "../../lib/utils.js"
-import { WorkflowHealthSection } from "../../components/WorkflowHealthSection.js"
+import { WorkflowHealthSection, resolveWatchedWorkflows } from "../../components/WorkflowHealthSection.js"
+import type { WatchedWorkflowCard } from "../../components/WorkflowHealthSection.js"
 import type { Repository, WorkflowRun } from "../../types/index.js"
 
 export const Route = createFileRoute("/_app/")({
@@ -28,15 +29,52 @@ function Dashboard() {
     staleTime: Infinity,
   })
 
-  const repoList = repos ?? []
+  const repoList = useMemo(() => repos ?? [], [repos])
+  const watchWorkflows = useMemo(() => appConfig?.watchWorkflows ?? [], [appConfig?.watchWorkflows])
 
-  // useQueries handles a dynamic-length array without violating Rules of Hooks
+  // Fetch repo-wide runs for HealthTable, ActivityCard, BuildTrends
   const runResults = useQueries({
     queries: repoList.map((r) => {
       const [owner, name] = r.fullName.split("/")
       return {
-        queryKey: ["runs", r.fullName, "recent"] as const,
+        queryKey: ["runs", r.fullName, "dashboard"] as const,
         queryFn: () => getRuns(owner!, name!, { per_page: 100 }),
+        refetchInterval: 60_000,
+        enabled: !!owner && !!name,
+      }
+    }),
+  })
+
+  // Fetch workflow catalogs for each repo (used for watched workflow resolution)
+  const catalogResults = useQueries({
+    queries: repoList.map((r) => {
+      const [owner, name] = r.fullName.split("/")
+      return {
+        queryKey: ["workflows", owner, name] as const,
+        queryFn: () => getWorkflows(owner!, name!),
+        staleTime: 10 * 60 * 1000,
+        enabled: !!owner && !!name && watchWorkflows.length > 0,
+      }
+    }),
+  })
+
+  // Resolve watch names against catalogs → list of (repo, workflowId, catalogName)
+  const resolvedMatches = useMemo(() => {
+    if (watchWorkflows.length === 0) return []
+    const repoCatalogs = repoList.map((r, i) => ({
+      fullName: r.fullName,
+      workflows: (catalogResults[i]?.data ?? []).map((w) => ({ id: w.id, name: w.name })),
+    }))
+    return resolveWatchedWorkflows(watchWorkflows, repoCatalogs)
+  }, [watchWorkflows, repoList, catalogResults])
+
+  // Fetch latest run for each resolved (repo, workflowId) via scoped endpoint
+  const healthRunResults = useQueries({
+    queries: resolvedMatches.map(({ fullName, workflowId }) => {
+      const [owner, name] = fullName.split("/")
+      return {
+        queryKey: ["workflow-runs", fullName, workflowId, "health"] as const,
+        queryFn: () => getWorkflowRuns(owner!, name!, workflowId, { per_page: 1 }),
         refetchInterval: 60_000,
         enabled: !!owner && !!name,
       }
@@ -51,12 +89,18 @@ function Dashboard() {
     runs: runResults[i]?.data?.runs ?? [],
   }))
 
-  const watchWorkflows = appConfig?.watchWorkflows ?? []
+  // Assemble health cards from resolved matches + their scoped run results
+  const healthCards: WatchedWorkflowCard[] = resolvedMatches.map((match, i) => ({
+    fullName: match.fullName,
+    workflowId: match.workflowId,
+    catalogName: match.catalogName,
+    run: healthRunResults[i]?.data?.runs[0] ?? null,
+  }))
 
   return (
     <div>
       <div className="stack">
-        <WorkflowHealthSection watchWorkflows={watchWorkflows} repoRuns={repoRuns} />
+        <WorkflowHealthSection watchWorkflows={watchWorkflows} cards={healthCards} />
         <ActivityCard repoRuns={repoRuns} repos={repoList} />
         <HealthTable repoRuns={repoRuns} repos={repoList} />
         <BuildTrendsCard repoRuns={repoRuns} repos={repoList} />
