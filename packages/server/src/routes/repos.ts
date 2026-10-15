@@ -64,7 +64,7 @@ repos.get("/", async (c) => {
   try {
     if (repoFilter) {
       const key = cacheKey(session.sub, "GET:/api/repos:explicit")
-      const cached = cacheGet<unknown[]>(key)
+      const cached = cacheGet<{ repos: unknown[]; errors: Array<{ repo: string; reason: string }> }>(key)
       if (cached !== undefined) {
         c.header("X-Cache", "HIT")
         return c.json(cached)
@@ -74,26 +74,37 @@ repos.get("/", async (c) => {
       const results = await Promise.allSettled(
         repoFilter.map((fullName) => githubFetch<unknown>(token, `/repos/${fullName}`))
       )
+      const data: unknown[] = []
+      const errors: Array<{ repo: string; reason: string }> = []
       results.forEach((r, i) => {
-        if (r.status === "rejected") {
+        if (r.status === "fulfilled") {
+          data.push(r.value.data)
+        } else {
+          const err = r.reason
+          let reason = "Unknown error"
+          if (err instanceof GitHubNotFoundError) {
+            reason = "Not found or insufficient permissions"
+          } else if (err instanceof GitHubApiError) {
+            reason = `GitHub API error ${err.statusCode}: ${err.message}`
+          } else if (err instanceof Error) {
+            reason = err.message
+          }
+          errors.push({ repo: repoFilter[i]!, reason })
           log.warn("Failed to fetch repo from GITHUB_REPOS", {
             repo: repoFilter[i],
-            error: r.reason instanceof Error ? r.reason.message : String(r.reason),
+            error: reason,
           })
         }
       })
-      const data = results
-        .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof githubFetch<unknown>>>> =>
-          r.status === "fulfilled"
-        )
-        .map((r) => r.value.data)
 
       log.debug("Resolved GITHUB_REPOS", {
-        requested: repoFilter,
+        requested: repoFilter.length,
         resolved: data.length,
+        failed: errors.length,
       })
-      cacheSet(key, data, TTL.repos)
-      return c.json(data)
+      const result = { repos: data, errors }
+      cacheSet(key, result, TTL.repos)
+      return c.json(result)
     }
 
     if (orgFilter) {
@@ -105,8 +116,9 @@ repos.get("/", async (c) => {
       }
       c.header("X-Cache", "MISS")
       const data = await fetchAllPages(token, `/orgs/${orgFilter}/repos?sort=pushed`)
-      cacheSet(key, data, TTL.repos)
-      return c.json(data)
+      const result = { repos: data, errors: [] }
+      cacheSet(key, result, TTL.repos)
+      return c.json(result)
     }
 
     // Default: authenticated user's repos
@@ -118,8 +130,9 @@ repos.get("/", async (c) => {
     }
     c.header("X-Cache", "MISS")
     const data = await fetchAllPages(token, "/user/repos?sort=pushed")
-    cacheSet(key, data, TTL.repos)
-    return c.json(data)
+    const result = { repos: data, errors: [] }
+    cacheSet(key, result, TTL.repos)
+    return c.json(result)
   } catch (err) {
     if (err instanceof GitHubNotFoundError) return c.json({ error: "Not found" }, 404)
     if (err instanceof GitHubApiError) {

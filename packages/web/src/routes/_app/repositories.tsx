@@ -20,12 +20,13 @@ function Repositories() {
 
   const [filter, setFilter] = useState("")
 
-  const { data: repos, isLoading } = useQuery({
+  const { data: reposResult, isLoading } = useQuery({
     queryKey: ["repos", "user"],
     queryFn: () => getRepos(),
     staleTime: 15 * 60 * 1000,
     enabled: !hasChild,
   })
+  const repos = reposResult?.repos
 
   if (hasChild) return <Outlet />
   if (isLoading) return <PageSpinner />
@@ -115,7 +116,7 @@ function RepoRow({
   repo: { fullName: string; language: string | null; pushedAt: string | null }
 }) {
   const { data: runsData } = useQuery({
-    queryKey: ["runs", `${owner}/${name}`, "recent"],
+    queryKey: ["runs", `${owner}/${name}`, "repo-list"],
     queryFn: () => getRuns(owner, name, { per_page: 10 }),
     staleTime: 2 * 60 * 1000,
   })

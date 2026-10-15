@@ -112,20 +112,23 @@ function AllRuns() {
   const { filter = "" } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
-  const { data: repos, isLoading: reposLoading } = useQuery({
+  const { data: reposResult, isLoading: reposLoading } = useQuery({
     queryKey: ["repos", "user"],
     queryFn: () => getRepos(),
     staleTime: 15 * 60 * 1000,
   })
 
-  const repoList = repos ?? []
+  const repoList = reposResult?.repos ?? []
+
+  // Fetch more runs when filtering so client-side search has better coverage
+  const perPage = filter ? 100 : 25
 
   const runResults = useQueries({
     queries: repoList.map((r) => {
       const [owner, name] = r.fullName.split("/")
       return {
-        queryKey: ["runs", r.fullName, "all-runs"] as const,
-        queryFn: () => getRuns(owner!, name!, { per_page: 25 }),
+        queryKey: ["runs", r.fullName, "all-runs", perPage] as const,
+        queryFn: () => getRuns(owner!, name!, { per_page: perPage }),
         staleTime: 30 * 1000,
         refetchInterval: 30_000,
         enabled: !!owner && !!name,
@@ -144,13 +147,15 @@ function AllRuns() {
     }))
   })
 
+  // Sum of GitHub's total_count across all repos (actual total, not just loaded)
+  const totalAcrossRepos = runResults.reduce((sum, r) => sum + (r.data?.total ?? 0), 0)
   const sortedRuns = mergeAndSortRuns(perRepo)
   const visibleRuns = filter ? filterRuns(sortedRuns, filter) : sortedRuns
   const isFiltered = filter.length > 0
 
   const title = isFiltered
-    ? `All Runs (${visibleRuns.length} of ${sortedRuns.length})`
-    : `All Runs (${sortedRuns.length})`
+    ? `Recent Runs (${visibleRuns.length} of ${sortedRuns.length} loaded)`
+    : `Recent Runs (${sortedRuns.length} of ${totalAcrossRepos.toLocaleString()})`
 
   function setFilter(value: string) {
     void navigate({ search: value ? { filter: value } : {} })
@@ -176,6 +181,11 @@ function AllRuns() {
               color: "var(--color-text)",
             }}
           />
+          {isFiltered && (
+            <span className="text-muted text-small" style={{ display: "block", marginTop: "0.375rem" }}>
+              Filtering {sortedRuns.length} loaded runs — older runs are not searched
+            </span>
+          )}
         </div>
         {visibleRuns.length === 0 ? (
           <p className="empty-state">
@@ -244,12 +254,13 @@ export function AllRunsTable({ runs }: { runs: RunWithRepo[] }) {
                   {repo}
                 </Link>
               </td>
-              <td>
+              <td style={{ maxWidth: "30ch" }}>
                 <Link
                   to="/runs/$owner/$repo/$runId"
                   params={{ owner, repo, runId: String(run.id) }}
                   title={run.displayTitle}
-                  style={{ fontWeight: 500, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                  className="truncate"
+                  style={{ fontWeight: 500, display: "block" }}
                 >
                   {run.displayTitle}
                 </Link>
@@ -259,7 +270,9 @@ export function AllRunsTable({ runs }: { runs: RunWithRepo[] }) {
                   </span>
                 )}
               </td>
-              <td className="text-small text-muted">{run.workflowName}</td>
+              <td className="text-small text-muted" style={{ maxWidth: "20ch" }}>
+                <span className="truncate" style={{ display: "block" }} title={run.workflowName}>{run.workflowName}</span>
+              </td>
               <td>
                 <div>
                   <a

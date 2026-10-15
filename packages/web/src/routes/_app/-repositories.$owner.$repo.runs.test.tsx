@@ -27,6 +27,7 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("../../api/index.js", () => ({
   getRuns: vi.fn(),
+  getWorkflowRuns: vi.fn(),
 }))
 
 vi.mock("../../components/ui/Spinner.js", () => ({
@@ -630,5 +631,115 @@ describe("RunsList — column sort", () => {
     const rows = screen.getAllByRole("row").slice(1)
     expect(rows[0]).toHaveTextContent("develop")
     expect(rows[1]).toHaveTextContent("main")
+  })
+})
+
+// ── Workflow-scoped mode ─────────────────────────────────────────────────────
+
+describe("RunsList — workflow-scoped mode", () => {
+  it("shows workflow scope badge when workflowId is present", () => {
+    withSearch({ page: 1, workflowId: 42 })
+    withRuns([])
+    render(<RunsList />)
+    expect(screen.getByText("Workflow #42")).toBeInTheDocument()
+  })
+
+  it("shows 'Show all workflows' link to clear the scope", () => {
+    withSearch({ page: 1, workflowId: 42 })
+    withRuns([])
+    render(<RunsList />)
+    expect(screen.getByText("Show all workflows")).toBeInTheDocument()
+  })
+
+  it("clicking 'Show all workflows' navigates with workflowId cleared", () => {
+    withSearch({ page: 1, workflowId: 42 })
+    withRuns([])
+    render(<RunsList />)
+    fireEvent.click(screen.getByText("Show all workflows"))
+    expect(mockNavigate).toHaveBeenCalledOnce()
+    const { search } = mockNavigate.mock.calls[0]![0] as {
+      search: (prev: Record<string, unknown>) => Record<string, unknown>
+    }
+    const updated = search({ workflowId: 42, page: 3 })
+    expect(updated.workflowId).toBeUndefined()
+    expect(updated.page).toBe(1)
+  })
+
+  it("supports pagination when workflowId is set", () => {
+    withSearch({ page: 1, workflowId: 42 })
+    mockUseQuery.mockReturnValue({
+      data: { runs: [makeRun()], total: 90 },
+      isLoading: false,
+    } as ReturnType<typeof useQuery>)
+    render(<RunsList />)
+    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument()
+  })
+
+  it("q filter applies on top of workflow-scoped results", () => {
+    withSearch({ page: 1, workflowId: 42, q: "deploy" })
+    withRuns([
+      makeRun({ workflowName: "Publish", headBranch: "deploy/hotfix" }),
+      makeRun({ workflowName: "Publish", headBranch: "main" }),
+    ])
+    render(<RunsList />)
+    // "deploy" should filter to the run with deploy/hotfix branch
+    expect(screen.getByText("deploy/hotfix")).toBeInTheDocument()
+    expect(screen.queryByText(/Run 2/)).not.toBeInTheDocument()
+  })
+
+  it("shows 'Filtering loaded results' indicator when both workflowId and q are set", () => {
+    withSearch({ page: 1, workflowId: 42, q: "main" })
+    withRuns([makeRun()])
+    render(<RunsList />)
+    expect(screen.getByText("Filtering loaded results")).toBeInTheDocument()
+  })
+
+  it("does not show workflow badge when workflowId is absent", () => {
+    withSearch({ page: 1 })
+    withRuns([])
+    render(<RunsList />)
+    expect(screen.queryByText(/Workflow #/)).not.toBeInTheDocument()
+    expect(screen.queryByText("Show all workflows")).not.toBeInTheDocument()
+  })
+
+  it("shows 'Filtering loaded results' for legacy q-only mode", () => {
+    withSearch({ page: 1, q: "CI" })
+    withRuns([makeRun({ workflowName: "CI" })])
+    render(<RunsList />)
+    expect(screen.getByText("Filtering loaded results")).toBeInTheDocument()
+  })
+
+  it("uses workflow-runs query key when workflowId is set", () => {
+    withSearch({ page: 1, workflowId: 42 })
+    withRuns([])
+    render(<RunsList />)
+    const call = mockUseQuery.mock.calls[0]![0] as { queryKey: unknown[] }
+    expect(call.queryKey[0]).toBe("workflow-runs")
+    expect(call.queryKey[2]).toBe(42)
+  })
+
+  it("uses repo-wide runs query key when workflowId is absent", () => {
+    withSearch({ page: 1 })
+    withRuns([])
+    render(<RunsList />)
+    const call = mockUseQuery.mock.calls[0]![0] as { queryKey: unknown[] }
+    expect(call.queryKey[0]).toBe("runs")
+  })
+
+  it("uses workflow-scoped query key even when q is also set", () => {
+    withSearch({ page: 1, workflowId: 42, q: "deploy" })
+    withRuns([])
+    render(<RunsList />)
+    const call = mockUseQuery.mock.calls[0]![0] as { queryKey: unknown[] }
+    expect(call.queryKey[0]).toBe("workflow-runs")
+    expect(call.queryKey[2]).toBe(42)
+  })
+
+  it("pagination page is passed through in workflow-scoped query key", () => {
+    withSearch({ page: 3, workflowId: 42 })
+    withRuns([])
+    render(<RunsList />)
+    const call = mockUseQuery.mock.calls[0]![0] as { queryKey: unknown[] }
+    expect(call.queryKey[3]).toEqual({ page: 3, perPage: 30 })
   })
 })

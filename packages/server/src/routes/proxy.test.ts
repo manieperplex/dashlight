@@ -398,7 +398,7 @@ describe("write deduplication (POST/PATCH/DELETE)", () => {
 // ── invalidateOnWrite ──────────────────────────────────────────────────────────
 
 describe("cache invalidation on write", () => {
-  it("invalidates runs, jobs, workflows, and score for the affected repo", async () => {
+  it("invalidates runs, jobs, workflow-scoped runs, and score for the affected repo", async () => {
     mockGithubFetch.mockResolvedValueOnce(githubResult({}))
 
     await makeApp().request("/proxy/repos/myorg/myrepo/actions/runs/42/rerun", { method: "POST" })
@@ -406,12 +406,29 @@ describe("cache invalidation on write", () => {
     const invalidatedPaths = mockCacheInvalidate.mock.calls.map((call) => call[1])
     expect(invalidatedPaths).toContain("GET:/repos/myorg/myrepo/actions/runs")
     expect(invalidatedPaths).toContain("GET:/repos/myorg/myrepo/actions/jobs")
-    expect(invalidatedPaths).toContain("GET:/repos/myorg/myrepo/actions/workflows")
+    // Trailing slash matches workflow-scoped runs (…/workflows/123/runs)
+    // but NOT the catalog (…/workflows?per_page=100)
+    expect(invalidatedPaths).toContain("GET:/repos/myorg/myrepo/actions/workflows/")
     expect(invalidatedPaths).toContain("score:myorg/myrepo")
 
     const staleInvalidatedPaths = mockStaleInvalidate.mock.calls.map((call) => call[1])
     expect(staleInvalidatedPaths).toContain("GET:/repos/myorg/myrepo/actions/runs")
     expect(staleInvalidatedPaths).toContain("GET:/repos/myorg/myrepo/actions/jobs")
+    expect(staleInvalidatedPaths).toContain("GET:/repos/myorg/myrepo/actions/workflows/")
+  })
+
+  it("does not invalidate the workflow catalog on write", async () => {
+    mockGithubFetch.mockResolvedValueOnce(githubResult({}))
+
+    await makeApp().request("/proxy/repos/myorg/myrepo/actions/runs/42/rerun", { method: "POST" })
+
+    const invalidatedPaths = mockCacheInvalidate.mock.calls.map((call) => call[1])
+    // The catalog key would be "GET:/repos/myorg/myrepo/actions/workflows" (no trailing slash).
+    // Only "workflows/" (with slash) should appear, targeting scoped runs.
+    const catalogInvalidations = invalidatedPaths.filter(
+      (p: string) => p === "GET:/repos/myorg/myrepo/actions/workflows"
+    )
+    expect(catalogInvalidations).toHaveLength(0)
   })
 
   it("does not invalidate when path has no repo segment", async () => {

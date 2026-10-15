@@ -518,33 +518,33 @@ describe("AllRuns page", () => {
     expect(screen.getByTestId("page-spinner")).toBeInTheDocument()
   })
 
-  it("shows 'All Runs (0)' when repos load but have no runs", () => {
-    vi.mocked(useQuery).mockReturnValue({ data: [], isLoading: false } as never)
+  it("shows 'Recent Runs (0 of 0)' when repos load but have no runs", () => {
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [], errors: [] }, isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([])
     render(<AllRuns />)
-    expect(screen.getByTestId("card-header")).toHaveTextContent("All Runs (0)")
+    expect(screen.getByTestId("card-header")).toHaveTextContent("Recent Runs (0 of 0)")
   })
 
   it("shows empty state text when there are no runs", () => {
-    vi.mocked(useQuery).mockReturnValue({ data: [], isLoading: false } as never)
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [], errors: [] }, isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([])
     render(<AllRuns />)
     expect(screen.getByText("No runs found.")).toBeInTheDocument()
   })
 
-  it("shows 'All Runs (N)' with the correct count when runs are present", () => {
+  it("shows loaded count and total in header when runs are present", () => {
     const repo = { id: 1, fullName: "acme/api" }
-    vi.mocked(useQuery).mockReturnValue({ data: [repo], isLoading: false } as never)
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [repo], errors: [] }, isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([
-      { data: { runs: [makeRun(), makeRun(), makeRun()], actionsDisabled: false } },
+      { data: { runs: [makeRun(), makeRun(), makeRun()], total: 150, actionsDisabled: false } },
     ] as never)
     render(<AllRuns />)
-    expect(screen.getByTestId("card-header")).toHaveTextContent("All Runs (3)")
+    expect(screen.getByTestId("card-header")).toHaveTextContent("Recent Runs (3 of 150)")
   })
 
   it("renders the runs table when runs are present", () => {
     const repo = { id: 1, fullName: "acme/api" }
-    vi.mocked(useQuery).mockReturnValue({ data: [repo], isLoading: false } as never)
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [repo], errors: [] }, isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([
       { data: { runs: [makeRun({ displayTitle: "Deploy" })], actionsDisabled: false } },
     ] as never)
@@ -555,18 +555,29 @@ describe("AllRuns page", () => {
   it("shows filtered count in header when filter is active", () => {
     Route.useSearch = vi.fn().mockReturnValue({ filter: "acme" })
     const repo = { id: 1, fullName: "acme/api" }
-    vi.mocked(useQuery).mockReturnValue({ data: [repo], isLoading: false } as never)
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [repo], errors: [] }, isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([
-      { data: { runs: [makeRun(), makeRun()], actionsDisabled: false } },
+      { data: { runs: [makeRun(), makeRun()], total: 500, actionsDisabled: false } },
     ] as never)
     render(<AllRuns />)
-    expect(screen.getByTestId("card-header")).toHaveTextContent("of 2")
+    expect(screen.getByTestId("card-header")).toHaveTextContent("Recent Runs (2 of 2 loaded)")
+  })
+
+  it("shows scope indicator when filter is active", () => {
+    Route.useSearch = vi.fn().mockReturnValue({ filter: "deploy" })
+    const repo = { id: 1, fullName: "acme/api" }
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [repo], errors: [] }, isLoading: false } as never)
+    vi.mocked(useQueries).mockReturnValue([
+      { data: { runs: [makeRun()], total: 100, actionsDisabled: false } },
+    ] as never)
+    render(<AllRuns />)
+    expect(screen.getByText(/older runs are not searched/)).toBeInTheDocument()
   })
 
   it("shows filter-specific empty state when filter matches nothing", () => {
     Route.useSearch = vi.fn().mockReturnValue({ filter: "zzznomatch" })
     const repo = { id: 1, fullName: "acme/api" }
-    vi.mocked(useQuery).mockReturnValue({ data: [repo], isLoading: false } as never)
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [repo], errors: [] }, isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([
       { data: { runs: [makeRun()], actionsDisabled: false } },
     ] as never)
@@ -575,7 +586,7 @@ describe("AllRuns page", () => {
   })
 
   it("renders a filter input", () => {
-    vi.mocked(useQuery).mockReturnValue({ data: [], isLoading: false } as never)
+    vi.mocked(useQuery).mockReturnValue({ data: { repos: [], errors: [] }, isLoading: false } as never)
     vi.mocked(useQueries).mockReturnValue([])
     render(<AllRuns />)
     expect(screen.getByPlaceholderText("Search here...")).toBeInTheDocument()
