@@ -6,38 +6,19 @@ import type { WorkflowRun } from "../types/index.js"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface RepoRunEntry {
-  name: string
-  fullName: string
-  runs: WorkflowRun[]
+/** A resolved watched-workflow card: identified by (repo, workflowId). */
+export interface WatchedWorkflowCard {
+  fullName: string          // "owner/repo"
+  workflowId: number
+  catalogName: string       // workflow name from the catalog (source of truth)
+  run: WorkflowRun | null   // latest run, or null if workflow exists but has no runs
 }
 
 interface WorkflowHealthSectionProps {
   watchWorkflows: string[]
-  repoRuns: RepoRunEntry[]
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Prioritise in-progress/queued; fall back to most recent. */
-function pickRun(runs: WorkflowRun[]): WorkflowRun | undefined {
-  return runs.find((r) => r.status === "in_progress" || r.status === "queued") ?? runs[0]
-}
-
-/**
- * Returns the display label for a repo within a set of cards.
- * Normally just the repo short-name; when another card shares that
- * short-name (different owner), prefixes the first 3 chars of the
- * owner followed by "…/" to disambiguate — e.g. "man…/api".
- */
-export function repoDisplayLabel(fullName: string, duplicateRepoNames: Set<string>): { owner: string | null; repo: string } {
-  const slash = fullName.indexOf("/")
-  const owner = fullName.slice(0, slash)
-  const repo = fullName.slice(slash + 1)
-  if (duplicateRepoNames.has(repo)) {
-    return { owner: `${owner.slice(0, 3)}…`, repo }
-  }
-  return { owner: null, repo }
+  cards: WatchedWorkflowCard[]
+  /** Watch names that matched zero catalog entries across all repos. */
+  unresolvedNames?: string[]
 }
 
 // ── Run dot ───────────────────────────────────────────────────────────────────
@@ -54,20 +35,46 @@ function RunDot({ status, conclusion }: { status: WorkflowRun["status"]; conclus
 
 // ── Single run card ───────────────────────────────────────────────────────────
 
-function HealthRunCard({ run, fullName, duplicateRepoNames }: {
-  run: WorkflowRun
-  fullName: string
+function HealthRunCard({ card, duplicateRepoNames }: {
+  card: WatchedWorkflowCard
   duplicateRepoNames: Set<string>
 }) {
+  const { fullName, catalogName, run } = card
   const slash = fullName.indexOf("/")
   const ownerRaw = fullName.slice(0, slash)
   const repo = fullName.slice(slash + 1)
+  const { owner: ownerPrefix } = repoDisplayLabel(fullName, duplicateRepoNames)
+
+  // Workflow exists but has no runs yet
+  if (!run) {
+    return (
+      <div
+        className="latest-run-card"
+        style={{ borderLeft: "3px solid var(--color-border)" }}
+      >
+        <div
+          className="latest-run-repo"
+          title={fullName}
+          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {ownerPrefix && <span className="health-repo-label-owner">{ownerPrefix}/</span>}{repo}
+        </div>
+        <div className="flex-center gap-2" style={{ justifyContent: "space-between", minWidth: 0 }}>
+          <span className="latest-run-workflow truncate text-muted">{catalogName}</span>
+          <span className="run-dot run-dot-neutral" />
+        </div>
+        <div className="flex-center gap-1 latest-run-time text-muted text-small">
+          No runs yet
+        </div>
+      </div>
+    )
+  }
+
   const isActive = run.status === "in_progress" || run.status === "queued"
   const commitUrl = `https://github.com/${fullName}/commit/${run.headSha}`
   const duration = formatDuration(run.runStartedAt, isActive ? null : run.updatedAt)
   const variant = runStatusVariant(run.status, run.conclusion)
   const color = VARIANT_COLOR[variant]
-  const { owner: ownerPrefix } = repoDisplayLabel(fullName, duplicateRepoNames)
 
   return (
     <div
@@ -89,11 +96,11 @@ function HealthRunCard({ run, fullName, duplicateRepoNames }: {
           params={{ owner: ownerRaw, repo, runId: String(run.id) }}
           className="latest-run-workflow latest-run-card-link truncate"
         >
-          {run.workflowName ?? run.name}
+          {catalogName}
         </Link>
         <RunDot status={run.status} conclusion={run.conclusion} />
       </div>
-      <div className="flex-center gap-2 latest-run-meta" style={{ flexWrap: "wrap" }}>
+      <div className="flex-center gap-2 latest-run-meta" style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
         <a
           href={`https://github.com/${fullName}/tree/${run.headBranch}`}
           target="_blank"
@@ -101,7 +108,7 @@ function HealthRunCard({ run, fullName, duplicateRepoNames }: {
           className="mono latest-run-sha flex-center gap-1 latest-run-meta-link"
         >
           <BranchIcon />
-          <span className="truncate" style={{ maxWidth: "10ch" }}>{run.headBranch}</span>
+          <span className="truncate" style={{ maxWidth: "8ch" }}>{run.headBranch}</span>
         </a>
         <span style={{ opacity: 0.4 }}>·</span>
         <a
@@ -122,6 +129,47 @@ function HealthRunCard({ run, fullName, duplicateRepoNames }: {
       </div>
     </div>
   )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the display label for a repo within a set of cards.
+ * Normally just the repo short-name; when another card shares that
+ * short-name (different owner), prefixes the first 3 chars of the
+ * owner followed by "…/" to disambiguate — e.g. "man…/api".
+ */
+export function repoDisplayLabel(fullName: string, duplicateRepoNames: Set<string>): { owner: string | null; repo: string } {
+  const slash = fullName.indexOf("/")
+  const owner = fullName.slice(0, slash)
+  const repo = fullName.slice(slash + 1)
+  if (duplicateRepoNames.has(repo)) {
+    return { owner: `${owner.slice(0, 3)}…`, repo }
+  }
+  return { owner: null, repo }
+}
+
+/**
+ * Resolve watch workflow names against a set of repository workflow catalogs.
+ * Returns one WatchedWorkflowCard per (repo, matched workflow) pair.
+ * Matching is case-insensitive exact on the catalog workflow name.
+ */
+export function resolveWatchedWorkflows(
+  watchWorkflows: string[],
+  repoCatalogs: Array<{ fullName: string; workflows: Array<{ id: number; name: string }> }>,
+): Array<{ fullName: string; workflowId: number; catalogName: string }> {
+  const results: Array<{ fullName: string; workflowId: number; catalogName: string }> = []
+  for (const { fullName, workflows } of repoCatalogs) {
+    for (const wfName of watchWorkflows) {
+      const lower = wfName.toLowerCase()
+      for (const w of workflows) {
+        if (w.name.toLowerCase() === lower) {
+          results.push({ fullName, workflowId: w.id, catalogName: w.name })
+        }
+      }
+    }
+  }
+  return results
 }
 
 // ── Icons (inline SVG — same as used elsewhere in the dashboard) ──────────────
@@ -154,22 +202,13 @@ function CommitIcon() {
 
 // ── Section ───────────────────────────────────────────────────────────────────
 
-export function WorkflowHealthSection({ watchWorkflows, repoRuns }: WorkflowHealthSectionProps) {
+export function WorkflowHealthSection({ watchWorkflows, cards, unresolvedNames }: WorkflowHealthSectionProps) {
   if (watchWorkflows.length === 0) return null
 
-  // Flatten: one entry per (repo × matched workflow), preserving watchWorkflows order
-  const cards: { fullName: string; run: WorkflowRun }[] = []
-  for (const { fullName, runs } of repoRuns) {
-    for (const wfName of watchWorkflows) {
-      const matching = runs.filter(
-        (r) => r.workflowName.toLowerCase() === wfName.toLowerCase()
-      )
-      const run = pickRun(matching)
-      if (run) cards.push({ fullName, run })
-    }
-  }
+  const hasUnresolved = unresolvedNames && unresolvedNames.length > 0
 
-  if (cards.length === 0) return null
+  // Nothing to show at all — no cards and no diagnostics
+  if (cards.length === 0 && !hasUnresolved) return null
 
   // Detect repo short-names that appear under more than one distinct owner
   const repoOwnerMap = new Map<string, Set<string>>()
@@ -192,11 +231,24 @@ export function WorkflowHealthSection({ watchWorkflows, repoRuns }: WorkflowHeal
         <span className="card-title">Workflow Health</span>
         <TruncatingTitle items={watchWorkflows} className="text-muted text-small" />
       </div>
-      <div className="latest-runs-grid">
-        {cards.map(({ fullName, run }) => (
-          <HealthRunCard key={`${fullName}/${run.workflowId}`} run={run} fullName={fullName} duplicateRepoNames={duplicateRepoNames} />
-        ))}
-      </div>
+      {cards.length > 0 && (
+        <div className="latest-runs-grid">
+          {cards.map((card) => (
+            <HealthRunCard
+              key={`${card.fullName}/${card.workflowId}`}
+              card={card}
+              duplicateRepoNames={duplicateRepoNames}
+            />
+          ))}
+        </div>
+      )}
+      {hasUnresolved && (
+        <div className="text-muted text-small" style={{ padding: "0.5rem 0.75rem" }} data-testid="unresolved-names">
+          {unresolvedNames.map((name) => (
+            <div key={name}>No matching workflow found for <strong>{name}</strong></div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }

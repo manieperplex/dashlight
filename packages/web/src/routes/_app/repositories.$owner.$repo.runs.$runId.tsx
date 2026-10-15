@@ -109,7 +109,7 @@ function RunDetail() {
         {/* ── Title + workflow + event + actions ── */}
         <div className="flex-center gap-3" style={{ alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: "0.25rem" }}>
+            <h1 className="truncate" title={run.displayTitle} style={{ fontSize: 18, fontWeight: 600, marginBottom: "0.25rem" }}>
               {run.displayTitle}
             </h1>
             <div className="flex-center gap-2 text-small text-muted">
@@ -437,10 +437,13 @@ function BranchHistoryCard({
             {runs.map((r) => (
               <tr key={r.id}>
                 <td className="text-muted text-small mono">{r.runNumber}</td>
-                <td>
+                <td style={{ maxWidth: "30ch" }}>
                   <Link
                     to="/runs/$owner/$repo/$runId"
                     params={{ owner, repo, runId: String(r.id) }}
+                    className="truncate"
+                    style={{ display: "block" }}
+                    title={r.displayTitle}
                   >
                     {r.displayTitle}
                   </Link>

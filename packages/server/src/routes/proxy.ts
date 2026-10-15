@@ -227,7 +227,10 @@ proxy.patch("/*", async (c) => {
 function resolveTtl(path: string): number {
   if (path.startsWith("/user/orgs")) return TTL.orgs
   if (path.startsWith("/user/repos") || path.match(/\/orgs\/[^/]+\/repos/)) return TTL.repos
-  if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/workflows($|\/[^/]+\/runs)/)) return TTL.workflows
+  // Workflow-scoped runs: /repos/{o}/{r}/actions/workflows/{id}/runs → runs TTL (2 min)
+  if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/workflows\/[^/]+\/runs/)) return TTL.runs
+  // Workflow catalog: /repos/{o}/{r}/actions/workflows → workflows TTL (10 min)
+  if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/workflows/)) return TTL.workflows
   if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/runs\/[^/]+\/jobs/)) return TTL.jobs
   if (path.match(/\/repos\/[^/]+\/[^/]+\/actions\/runs/)) return TTL.runs
   if (path.match(/\/repos\/[^/]+\/[^/]+\/check-runs/)) return TTL.annotations
@@ -250,12 +253,17 @@ function invalidateOnWrite(userId: string, path: string): void {
   const repoMatch = path.match(/^\/repos\/([^/]+\/[^/]+)/)
   if (repoMatch?.[1]) {
     const repoPath = repoMatch[1]
+    // Repo-wide runs and jobs
     cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/runs`)
     cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/jobs`)
-    cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/workflows`)
+    // Workflow-scoped runs: prefix "workflows/" matches scoped run keys
+    // (e.g. …/workflows/123/runs?…) but NOT the catalog (…/workflows?…)
+    cacheInvalidate(userId, `GET:/repos/${repoPath}/actions/workflows/`)
     cacheInvalidate(userId, `score:${repoPath}`)
+    // Stale entries
     staleInvalidate(userId, `GET:/repos/${repoPath}/actions/runs`)
     staleInvalidate(userId, `GET:/repos/${repoPath}/actions/jobs`)
+    staleInvalidate(userId, `GET:/repos/${repoPath}/actions/workflows/`)
   }
 }
 

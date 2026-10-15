@@ -18,6 +18,9 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("../../api/index.js", () => ({
   getRepos: vi.fn(),
   getRuns: vi.fn(),
+  getAppConfig: vi.fn(),
+  getWorkflows: vi.fn(),
+  getWorkflowRuns: vi.fn(),
 }))
 
 vi.mock("../../components/charts/RunCharts.js", () => ({

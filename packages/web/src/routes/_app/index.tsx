@@ -1,14 +1,15 @@
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useQuery, useQueries } from "@tanstack/react-query"
-import { getRepos, getRuns, getAppConfig } from "../../api/index.js"
+import { getRepos, getRuns, getAppConfig, getWorkflows, getWorkflowRuns } from "../../api/index.js"
 import { PageSpinner } from "../../components/ui/Spinner.js"
 import { Card, CardHeader } from "../../components/ui/Card.js"
 import { RepoActivityChart, BuildTrendChart } from "../../components/charts/RunCharts.js"
 import type { RepoRunEntry } from "../../components/charts/RunCharts.js"
 import { SuccessSquares } from "../../components/ui/SuccessSquares.js"
 import { formatRelativeTime, computeRunSummary, formatDuration, runStatusVariant, VARIANT_COLOR } from "../../lib/utils.js"
-import { WorkflowHealthSection } from "../../components/WorkflowHealthSection.js"
+import { WorkflowHealthSection, resolveWatchedWorkflows } from "../../components/WorkflowHealthSection.js"
+import type { WatchedWorkflowCard } from "../../components/WorkflowHealthSection.js"
 import type { Repository, WorkflowRun } from "../../types/index.js"
 
 export const Route = createFileRoute("/_app/")({
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/_app/")({
 })
 
 function Dashboard() {
-  const { data: repos, isLoading } = useQuery({
+  const { data: reposResult, isLoading } = useQuery({
     queryKey: ["repos", "user"],
     queryFn: () => getRepos(),
     refetchInterval: 60_000,
@@ -28,20 +29,73 @@ function Dashboard() {
     staleTime: Infinity,
   })
 
-  const repoList = repos ?? []
+  const repoList = useMemo(() => reposResult?.repos ?? [], [reposResult?.repos])
+  const repoErrors = reposResult?.errors ?? []
+  const watchWorkflows = useMemo(() => appConfig?.watchWorkflows ?? [], [appConfig?.watchWorkflows])
 
-  // useQueries handles a dynamic-length array without violating Rules of Hooks
+  // Fetch repo-wide runs for HealthTable, ActivityCard, BuildTrends
   const runResults = useQueries({
     queries: repoList.map((r) => {
       const [owner, name] = r.fullName.split("/")
       return {
-        queryKey: ["runs", r.fullName, "recent"] as const,
+        queryKey: ["runs", r.fullName, "dashboard"] as const,
         queryFn: () => getRuns(owner!, name!, { per_page: 100 }),
         refetchInterval: 60_000,
         enabled: !!owner && !!name,
       }
     }),
   })
+
+  // Fetch workflow catalogs for each repo (used for watched workflow resolution)
+  const catalogResults = useQueries({
+    queries: repoList.map((r) => {
+      const [owner, name] = r.fullName.split("/")
+      return {
+        queryKey: ["workflows", owner, name] as const,
+        queryFn: () => getWorkflows(owner!, name!),
+        staleTime: 10 * 60 * 1000,
+        enabled: !!owner && !!name && watchWorkflows.length > 0,
+      }
+    }),
+  })
+
+  // Build a stable key from catalog data so resolvedMatches doesn't recompute
+  // on every render (useQueries returns a new array reference each time).
+  const catalogKey = useMemo(
+    () => catalogResults.map((r) => r.data?.map((w) => `${w.id}:${w.name}`).join(",") ?? "").join("|"),
+    [catalogResults],
+  )
+
+  // Resolve watch names against catalogs → list of (repo, workflowId, catalogName)
+  const resolvedMatches = useMemo(() => {
+    if (watchWorkflows.length === 0) return []
+    const repoCatalogs = repoList.map((r, i) => ({
+      fullName: r.fullName,
+      workflows: (catalogResults[i]?.data ?? []).map((w) => ({ id: w.id, name: w.name })),
+    }))
+    return resolveWatchedWorkflows(watchWorkflows, repoCatalogs)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- catalogKey is a stable string derived from catalogResults
+  }, [watchWorkflows, repoList, catalogKey])
+
+  // Fetch latest run for each resolved (repo, workflowId) via scoped endpoint
+  const healthRunResults = useQueries({
+    queries: resolvedMatches.map(({ fullName, workflowId }) => {
+      const [owner, name] = fullName.split("/")
+      return {
+        queryKey: ["workflow-runs", fullName, workflowId, "health"] as const,
+        queryFn: () => getWorkflowRuns(owner!, name!, workflowId, { per_page: 1 }),
+        refetchInterval: 60_000,
+        enabled: !!owner && !!name,
+      }
+    }),
+  })
+
+  // Identify watch names that matched zero catalog entries across all repos
+  const unresolvedNames = useMemo(() => {
+    if (watchWorkflows.length === 0) return []
+    const resolvedSet = new Set(resolvedMatches.map((m) => m.catalogName.toLowerCase()))
+    return watchWorkflows.filter((name) => !resolvedSet.has(name.toLowerCase()))
+  }, [watchWorkflows, resolvedMatches])
 
   if (isLoading) return <PageSpinner />
 
@@ -51,12 +105,33 @@ function Dashboard() {
     runs: runResults[i]?.data?.runs ?? [],
   }))
 
-  const watchWorkflows = appConfig?.watchWorkflows ?? []
+  // Assemble health cards from resolved matches + their scoped run results
+  const healthCards: WatchedWorkflowCard[] = resolvedMatches.map((match, i) => ({
+    fullName: match.fullName,
+    workflowId: match.workflowId,
+    catalogName: match.catalogName,
+    run: healthRunResults[i]?.data?.runs[0] ?? null,
+  }))
 
   return (
     <div>
       <div className="stack">
-        <WorkflowHealthSection watchWorkflows={watchWorkflows} repoRuns={repoRuns} />
+        {repoErrors.length > 0 && (
+          <Card>
+            <div className="card-header">
+              <span className="card-title">Configuration Issues</span>
+            </div>
+            <div className="text-small" style={{ padding: "0 0.75rem 0.75rem" }} data-testid="repo-errors">
+              {repoErrors.map(({ repo, reason }) => (
+                <div key={repo} style={{ padding: "0.25rem 0" }}>
+                  <strong>{repo}</strong>
+                  <span className="text-muted"> — {reason}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+        <WorkflowHealthSection watchWorkflows={watchWorkflows} cards={healthCards} unresolvedNames={unresolvedNames} />
         <ActivityCard repoRuns={repoRuns} repos={repoList} />
         <HealthTable repoRuns={repoRuns} repos={repoList} />
         <BuildTrendsCard repoRuns={repoRuns} repos={repoList} />
@@ -123,7 +198,7 @@ export function RepoRunCards({ fullName, runs }: { fullName: string; runs: Workf
               </Link>
               <RunDot status={run.status} conclusion={run.conclusion} />
             </div>
-            <div className="flex-center gap-2 latest-run-meta" style={{ flexWrap: "wrap" }}>
+            <div className="flex-center gap-2 latest-run-meta" style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
               <a
                 href={`https://github.com/${fullName}/tree/${run.headBranch}`}
                 target="_blank"
@@ -131,7 +206,7 @@ export function RepoRunCards({ fullName, runs }: { fullName: string; runs: Workf
                 className="mono latest-run-sha flex-center gap-1 latest-run-meta-link"
               >
                 <BranchIcon />
-                <span className="truncate" style={{ maxWidth: "10ch" }}>{run.headBranch}</span>
+                <span className="truncate" style={{ maxWidth: "8ch" }}>{run.headBranch}</span>
               </a>
               <span style={{ opacity: 0.4 }}>·</span>
               <a

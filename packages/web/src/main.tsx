@@ -34,7 +34,7 @@ ReactDOM.createRoot(root).render(
         // dehydrateOptions filter was added (which excluded auth queries).
         // Without this, users who loaded the app before the fix would still
         // have ["auth", "me"] in IndexedDB and bypass the password check on reload.
-        buster: "v2",
+        buster: "v3",
         // Auth state must never be restored from IndexedDB — always verify with
         // the server on page load so that adding APP_PASSWORD or changing auth
         // mode takes effect immediately without requiring a manual cache clear.

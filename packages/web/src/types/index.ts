@@ -182,3 +182,15 @@ export interface ActivePipeline {
 export interface AppConfig {
   watchWorkflows: string[]
 }
+
+// ── Repo fetch result ────────────────────────────────────────────────────────
+
+export interface RepoFetchError {
+  repo: string
+  reason: string
+}
+
+export interface RepoFetchResult {
+  repos: Repository[]
+  errors: RepoFetchError[]
+}
