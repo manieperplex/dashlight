@@ -198,7 +198,7 @@ export function RepoRunCards({ fullName, runs }: { fullName: string; runs: Workf
               </Link>
               <RunDot status={run.status} conclusion={run.conclusion} />
             </div>
-            <div className="flex-center gap-2 latest-run-meta" style={{ flexWrap: "wrap" }}>
+            <div className="flex-center gap-2 latest-run-meta" style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
               <a
                 href={`https://github.com/${fullName}/tree/${run.headBranch}`}
                 target="_blank"
@@ -206,7 +206,7 @@ export function RepoRunCards({ fullName, runs }: { fullName: string; runs: Workf
                 className="mono latest-run-sha flex-center gap-1 latest-run-meta-link"
               >
                 <BranchIcon />
-                <span className="truncate" style={{ maxWidth: "10ch" }}>{run.headBranch}</span>
+                <span className="truncate" style={{ maxWidth: "8ch" }}>{run.headBranch}</span>
               </a>
               <span style={{ opacity: 0.4 }}>·</span>
               <a
