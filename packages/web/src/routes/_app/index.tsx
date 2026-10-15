@@ -59,6 +59,13 @@ function Dashboard() {
     }),
   })
 
+  // Build a stable key from catalog data so resolvedMatches doesn't recompute
+  // on every render (useQueries returns a new array reference each time).
+  const catalogKey = useMemo(
+    () => catalogResults.map((r) => r.data?.map((w) => `${w.id}:${w.name}`).join(",") ?? "").join("|"),
+    [catalogResults],
+  )
+
   // Resolve watch names against catalogs → list of (repo, workflowId, catalogName)
   const resolvedMatches = useMemo(() => {
     if (watchWorkflows.length === 0) return []
@@ -67,7 +74,8 @@ function Dashboard() {
       workflows: (catalogResults[i]?.data ?? []).map((w) => ({ id: w.id, name: w.name })),
     }))
     return resolveWatchedWorkflows(watchWorkflows, repoCatalogs)
-  }, [watchWorkflows, repoList, catalogResults])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- catalogKey is a stable string derived from catalogResults
+  }, [watchWorkflows, repoList, catalogKey])
 
   // Fetch latest run for each resolved (repo, workflowId) via scoped endpoint
   const healthRunResults = useQueries({

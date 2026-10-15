@@ -244,12 +244,13 @@ export function AllRunsTable({ runs }: { runs: RunWithRepo[] }) {
                   {repo}
                 </Link>
               </td>
-              <td>
+              <td style={{ maxWidth: "30ch" }}>
                 <Link
                   to="/runs/$owner/$repo/$runId"
                   params={{ owner, repo, runId: String(run.id) }}
                   title={run.displayTitle}
-                  style={{ fontWeight: 500, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                  className="truncate"
+                  style={{ fontWeight: 500, display: "block" }}
                 >
                   {run.displayTitle}
                 </Link>
@@ -259,7 +260,9 @@ export function AllRunsTable({ runs }: { runs: RunWithRepo[] }) {
                   </span>
                 )}
               </td>
-              <td className="text-small text-muted">{run.workflowName}</td>
+              <td className="text-small text-muted" style={{ maxWidth: "20ch" }}>
+                <span className="truncate" style={{ display: "block" }} title={run.workflowName}>{run.workflowName}</span>
+              </td>
               <td>
                 <div>
                   <a

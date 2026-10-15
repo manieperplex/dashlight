@@ -335,11 +335,13 @@ export function RecentRunsCard({ owner, repo }: { owner: string; repo: string })
             <tbody>
               {runs.map((run) => (
                 <tr key={run.id}>
-                  <td>
+                  <td style={{ maxWidth: "30ch" }}>
                     <Link
                       to="/runs/$owner/$repo/$runId"
                       params={{ owner, repo, runId: String(run.id) }}
-                      style={{ fontWeight: 500 }}
+                      className="truncate"
+                      style={{ fontWeight: 500, display: "block" }}
+                      title={run.displayTitle}
                     >
                       {run.displayTitle}
                     </Link>

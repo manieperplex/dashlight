@@ -271,12 +271,20 @@ export async function getWorkflowRuns(
   qs.set("per_page", String(params.per_page ?? 30))
   qs.set("page", String(params.page ?? 1))
 
-  const res = await fetchApi<{ workflow_runs: GHRun[]; total_count: number }>(
-    `/proxy/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?${qs.toString()}`
-  )
-  return {
-    runs: res.workflow_runs.map(normalizeRun),
-    total: res.total_count,
+  try {
+    const res = await fetchApi<{ workflow_runs: GHRun[]; total_count: number }>(
+      `/proxy/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?${qs.toString()}`
+    )
+    return {
+      runs: res.workflow_runs.map(normalizeRun),
+      total: res.total_count,
+    }
+  } catch (err) {
+    // 404 = workflow deleted or inaccessible; 403 = insufficient permissions
+    if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+      return { runs: [], total: 0 }
+    }
+    throw err
   }
 }
 
